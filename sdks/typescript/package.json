@@ -11,6 +11,7 @@
   },
   "homepage": "https://github.com/yash1511-bogam/archon",
   "keywords": ["ai", "agents", "llm", "framework", "production", "budget", "routing"],
+  "packageManager": "pnpm@9.15.9",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
