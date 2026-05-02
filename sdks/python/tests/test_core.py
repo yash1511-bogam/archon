@@ -998,3 +998,173 @@ def test_agent_card_roundtrip():
     assert restored.url == original.url
     assert len(restored.skills) == 2
     assert restored.skills[0].id == "s1"
+
+
+# ══════════════════════════════════════════════════════
+# Model Registry Tests
+# ══════════════════════════════════════════════════════
+
+from archon.models import (
+    MODELS, ModelInfo, get_model, list_models, list_providers,
+    cheapest_for_tier, estimate_cost as model_estimate_cost,
+)
+
+
+def test_registry_has_models():
+    assert len(MODELS) > 140  # 80+ direct + 50+ Azure + 14 Bedrock
+
+
+def test_registry_all_providers():
+    providers = list_providers()
+    expected = {"openai", "anthropic", "google", "xai", "deepseek", "meta", "mistral",
+                "alibaba", "cohere", "ai21", "microsoft", "moonshot", "amazon",
+                "perplexity", "zhipu", "azure", "bedrock"}
+    assert expected.issubset(set(providers))
+
+
+def test_get_model():
+    m = get_model("gpt-5.4")
+    assert m is not None
+    assert m.provider == "openai"
+    assert m.input_cost == 2.50
+    assert m.context_window == 1_100_000
+
+
+def test_get_model_not_found():
+    assert get_model("nonexistent-model") is None
+
+
+def test_list_models_by_provider():
+    openai_models = list_models(provider="openai")
+    assert len(openai_models) >= 15
+    assert all(m.provider == "openai" for m in openai_models)
+
+
+def test_list_models_by_tier():
+    budget = list_models(tier="budget")
+    assert len(budget) >= 20
+    assert all(m.tier == "budget" for m in budget)
+
+
+def test_list_models_by_cost():
+    cheap = list_models(max_input_cost=0.20)
+    assert len(cheap) >= 5
+    assert all(m.input_cost <= 0.20 for m in cheap)
+
+
+def test_list_models_reasoning():
+    reasoning = list_models(is_reasoning=True)
+    assert len(reasoning) >= 5
+    assert all(m.is_reasoning for m in reasoning)
+
+
+def test_list_models_open_source():
+    oss = list_models(is_open_source=True)
+    assert len(oss) >= 20
+    assert all(m.is_open_source for m in oss)
+
+
+def test_list_models_vision():
+    vision = list_models(supports_vision=True)
+    assert len(vision) >= 10
+
+
+def test_list_models_large_context():
+    large_ctx = list_models(min_context=1_000_000)
+    assert len(large_ctx) >= 10
+
+
+def test_cheapest_for_tier():
+    cheapest_budget = cheapest_for_tier("budget")
+    assert cheapest_budget is not None
+    assert cheapest_budget.input_cost < 0.10
+
+
+def test_estimate_cost():
+    cost = model_estimate_cost("gpt-5.4", input_tokens=1000, output_tokens=500)
+    expected = (1000 * 2.50 + 500 * 15.00) / 1_000_000
+    assert cost == pytest.approx(expected)
+
+
+def test_estimate_cost_unknown_model():
+    assert model_estimate_cost("unknown", 1000, 500) == 0.0
+
+
+def test_model_info_frozen():
+    m = get_model("claude-sonnet-4.6")
+    assert m is not None
+    # ModelInfo is frozen — should not be mutable
+    with pytest.raises(AttributeError):
+        m.input_cost = 999.0  # type: ignore
+
+
+def test_specific_models_exist():
+    """Verify key models from each provider are registered."""
+    must_exist = [
+        # Direct API providers
+        "gpt-5.4", "gpt-5-nano", "gpt-4.1-mini", "o3", "o4-mini",
+        "claude-opus-4.6", "claude-sonnet-4.6", "claude-haiku-4.5",
+        "gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.0-flash",
+        "grok-4.20", "grok-4.1-fast",
+        "deepseek-v3.2", "deepseek-r1",
+        "llama-4-maverick", "llama-4-scout",
+        "mistral-large-3", "mistral-nemo",
+        "qwen-3-235b",
+        "command-r", "jamba-2-mini",
+        "phi-4", "kimi-k2.5", "nova-micro",
+        # Azure AI Foundry (Direct from Azure)
+        "azure/gpt-5.5", "azure/gpt-5.4", "azure/gpt-5.4-pro",
+        "azure/gpt-5.4-mini", "azure/gpt-5.4-nano",
+        "azure/gpt-4.1", "azure/gpt-4.1-mini", "azure/gpt-4.1-nano",
+        "azure/o3", "azure/o4-mini", "azure/model-router",
+        "azure/claude-opus-4.6", "azure/claude-sonnet-4.6", "azure/claude-haiku-4.5",
+        "azure/grok-4.20", "azure/grok-4", "azure/grok-4.1-fast",
+        "azure/deepseek-v3.2", "azure/deepseek-r1",
+        "azure/llama-4-maverick", "azure/llama-4-scout",
+        "azure/mistral-large-3", "azure/mistral-nemo", "azure/codestral",
+        "azure/command-r-plus", "azure/command-r",
+        "azure/phi-4", "azure/phi-4-mini", "azure/phi-4-multimodal",
+        "azure/mai-ds-r1",
+        "azure/kimi-k2.5", "azure/kimi-k2-thinking",
+        "azure/glm-5",
+        # AWS Bedrock
+        "bedrock/claude-opus-4.6", "bedrock/claude-sonnet-4.6", "bedrock/claude-haiku-4.5",
+        "bedrock/llama-4-maverick", "bedrock/llama-4-scout",
+        "bedrock/mistral-large-3",
+        "bedrock/nova-pro", "bedrock/nova-lite", "bedrock/nova-micro",
+        "bedrock/command-r-plus", "bedrock/command-r",
+    ]
+    for model_id in must_exist:
+        assert get_model(model_id) is not None, f"Missing model: {model_id}"
+
+
+def test_azure_foundry_models():
+    """Azure AI Foundry should have all major provider models."""
+    azure_models = list_models(provider="azure")
+    assert len(azure_models) >= 45  # OpenAI + Claude + Grok + DeepSeek + Llama + Mistral + Cohere + Phi + Kimi + GLM
+
+
+def test_azure_foundry_has_non_openai():
+    """Azure AI Foundry is NOT just Azure OpenAI — it has Claude, Grok, DeepSeek, Llama, Mistral, etc."""
+    azure_models = list_models(provider="azure")
+    model_ids = {m.id for m in azure_models}
+    # Must have non-OpenAI models
+    assert "azure/claude-opus-4.6" in model_ids
+    assert "azure/grok-4.20" in model_ids
+    assert "azure/deepseek-v3.2" in model_ids
+    assert "azure/llama-4-maverick" in model_ids
+    assert "azure/mistral-large-3" in model_ids
+    assert "azure/phi-4" in model_ids
+    assert "azure/kimi-k2.5" in model_ids
+    assert "azure/glm-5" in model_ids
+    assert "azure/model-router" in model_ids
+
+
+def test_bedrock_models():
+    """AWS Bedrock should have Claude, Llama, Mistral, Nova, Cohere, AI21."""
+    bedrock_models = list_models(provider="bedrock")
+    assert len(bedrock_models) >= 12
+    model_ids = {m.id for m in bedrock_models}
+    assert "bedrock/nova-micro" in model_ids
+    assert "bedrock/claude-opus-4.6" in model_ids
+    assert "bedrock/llama-4-scout" in model_ids

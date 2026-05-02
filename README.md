@@ -9,7 +9,9 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/tests-107%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-126%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/models-140%2B%20registered-blue" alt="Models">
+  <img src="https://img.shields.io/badge/providers-17%2B-blue" alt="Providers">
 </p>
 
 ---
@@ -353,29 +355,64 @@ result = await agent.run("Research the current state of AI agent frameworks in 2
 
 ---
 
-## Supported Models
+## Supported Models (140+ across 17 providers)
 
-Archon uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood, supporting **100+ models** across all major providers:
+Archon ships a built-in model registry with pricing for every major model from 2024–2026. The router uses this registry for cost-aware model selection. **Azure AI Foundry is fully supported — not just Azure OpenAI, but all 11,000+ Foundry models including Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, and GLM.**
 
-| Provider | Models | Setup |
-|----------|--------|-------|
-| **OpenAI** | GPT-4o, GPT-4.1, GPT-5, o3, o4-mini | `OPENAI_API_KEY` |
-| **Anthropic** | Claude Sonnet 4.6, Claude Opus 4.6, Haiku 4.5 | `ANTHROPIC_API_KEY` |
-| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 3 | `GEMINI_API_KEY` |
-| **DeepSeek** | DeepSeek V3.2, DeepSeek R1 | `DEEPSEEK_API_KEY` |
-| **Groq** | Llama 3.1, Mixtral (ultra-fast inference) | `GROQ_API_KEY` |
-| **AWS Bedrock** | Claude, Llama, Mistral via Bedrock | AWS credentials |
-| **Azure OpenAI** | GPT-4o, GPT-4.1 via Azure | Azure credentials |
-| **Ollama** | Any local model (Llama, Mistral, Phi, etc.) | Local Ollama server |
-| **OpenRouter** | 1600+ models via single API | `OPENROUTER_API_KEY` |
-| **Together AI** | Open-source models hosted | `TOGETHER_API_KEY` |
-| **Cerebras** | Ultra-fast inference (920 tok/s) | `CEREBRAS_API_KEY` |
+### Direct API Providers
 
-Set your API key and go:
+| Provider | Models | Price Range (Input $/MTok) | Highlights |
+|----------|--------|---------------------------|------------|
+| **OpenAI** | GPT-5.5, 5.4/Pro/Mini/Nano, 5.3 Codex, 5.2/Pro, 5.1, 5/Mini/Nano, 4.1/Mini/Nano, 4o/Mini, o3/Pro, o4-mini, GPT-OSS-120B | $0.05 – $30.00 | 1.1M context on GPT-5.4, model-router |
+| **Anthropic** | Claude Opus 4.7/4.6/4.5, Sonnet 4.6/4.5/4, Haiku 4.5/3.5 | $0.80 – $5.00 | 1M context flat-rate, 90% cache discount |
+| **Google** | Gemini 3.1/3 Pro, 3/2.5 Flash, 2.5/2.0 Flash-Lite, 1.5 Pro/Flash, Gemma 4/3 | $0.075 – $2.00 | 1M–2M context, free tiers |
+| **xAI** | Grok 4.20, 4, 4.1 Fast, Code Fast 1, 3, 3 Mini | $0.20 – $3.00 | 2M context, real-time X/web search |
+| **DeepSeek** | V4 Pro/Flash, V3.2/V3.1/V3, R2, R1 | $0.14 – $1.74 | 90% cache discount, Apache 2.0 |
+| **Meta** | Llama 4 Maverick/Scout, 3.3 70B, 3.1 405B/70B/8B | $0.05 – $3.00 | 10M context (Scout), fully open |
+| **Mistral** | Large 3, Small 4/3.2, Medium 3, Nemo, Codestral, Devstral 2 | $0.02 – $2.00 | EU AI Act compliant, MIT license |
+| **Alibaba** | Qwen 3.6 Plus, 3.5 Plus, 3 235B/32B/14B/8B | $0.00 – $0.455 | Free tier, 119 languages |
+| **Cohere** | Command A, R+, R, R7B, Embed, Rerank | $0.037 – $2.50 | RAG-optimized, multilingual |
+| **AI21** | Jamba 2 Large/Mini | $0.20 – $2.00 | 256K context |
+| **Microsoft** | Phi-4, Phi-4 Mini, Phi-4 Multimodal | $0.02 – $0.07 | Tiny but capable, open source |
+| **Moonshot** | Kimi K2.6, K2.5, K2 Thinking | $0.20 | 1M context, open source |
+| **Amazon** | Nova Pro, Lite, Micro | $0.035 – $0.80 | Bedrock-native |
+| **Perplexity** | Sonar Pro, Sonar | $1.00 – $3.00 | Built-in web search |
+| **Zhipu** | GLM-5 | $0.50 | MIT license, 744B MoE |
 
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
+### Platform Support
+
+| Platform | What It Provides | How Archon Uses It |
+|----------|-----------------|-------------------|
+| **Azure AI Foundry** | 11,000+ models: GPT-5.x, Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, GLM, Cohere, model-router, NVIDIA NIMs, Hugging Face, Stability AI | Set `AZURE_API_KEY` + `AZURE_API_BASE` — use `azure/` prefix. Supports all Direct + Partner models. |
+| **AWS Bedrock** | Claude, Llama, Mistral, Cohere, Nova, Titan | Set `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` — use `bedrock/` prefix |
+| **OpenRouter** | 1,600+ models via single API | Set `OPENROUTER_API_KEY` — use `openrouter/` prefix |
+| **Groq** | LPU-accelerated Llama, DeepSeek, Mixtral (300–840 tok/s) | Set `GROQ_API_KEY` — use `groq/` prefix |
+| **Together AI** | Serverless open models (Llama, DeepSeek, Qwen) | Set `TOGETHER_API_KEY` — use `together_ai/` prefix |
+| **Fireworks AI** | Optimized inference for open models | Set `FIREWORKS_API_KEY` — use `fireworks_ai/` prefix |
+| **Cerebras** | Ultra-fast inference (920 tok/s) | Set `CEREBRAS_API_KEY` — use `cerebras/` prefix |
+
+### Using the Model Registry
+
+```python
+from archon.models import list_models, get_model, estimate_cost
+
+# Find all budget models under $0.20/MTok input
+cheap = list_models(tier="budget", max_input_cost=0.20)
+for m in cheap[:5]:
+    print(f"{m.id:<25} ${m.input_cost:.3f} / ${m.output_cost:.3f}  {m.provider}")
+
+# Get pricing for a specific model
+gpt54 = get_model("gpt-5.4")
+print(f"GPT-5.4: ${gpt54.input_cost}/MTok in, ${gpt54.output_cost}/MTok out, {gpt54.context_window:,} ctx")
+
+# Estimate cost for a workload
+cost = estimate_cost("claude-sonnet-4.6", input_tokens=50_000, output_tokens=2_000)
+print(f"Estimated cost: ${cost:.4f}")
+
+# Filter by capability
+reasoning = list_models(is_reasoning=True)
+open_source = list_models(is_open_source=True, min_context=1_000_000)
+vision = list_models(supports_vision=True, max_input_cost=1.00)
 ```
 
 ---
@@ -528,7 +565,7 @@ make build
 
 ```bash
 make test
-# Runs: 4 Rust + 93 Python + 10 TypeScript = 107 tests
+# Runs: 4 Rust + 112 Python + 10 TypeScript = 126 tests
 ```
 
 ### Individual Components

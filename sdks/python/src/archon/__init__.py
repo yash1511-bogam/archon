@@ -6,6 +6,7 @@ from archon.cache import SemanticCache
 from archon.eval import EvalEngine, EvalResult, EvalSeverity
 from archon.governance import EventStore, EventType, GDPRManager, RBACManager, Role
 from archon.memory import Memory, MemoryEntry, MemoryType
+from archon.models import MODELS, ModelInfo, estimate_cost as model_estimate_cost, get_model, list_models, list_providers
 from archon.pipeline import CheckpointStore, Parallel, Pipeline, PipelineResult, PipelineStep
 from archon.protocols import AgentCard, AgentSkill, MCPClient
 from archon.router import Router, Tier
