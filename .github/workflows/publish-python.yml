@@ -15,7 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - working-directory: sdks/python
         run: |
-          uv sync
+          uv sync --all-extras
           uv run python -m pytest tests/ -v
           uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
