@@ -4,11 +4,14 @@ on:
   release:
     types: [published]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write  # trusted publishing
+      id-token: write
     environment: pypi
     steps:
       - uses: actions/checkout@v4
