@@ -596,39 +596,6 @@ make lint
 
 ---
 
-## Roadmap
-
-### Phase 0 — Foundation ✅ (Current)
-- [x] Rust core: types, budget tracker, router, trace store
-- [x] Python SDK: Agent, @tool, Budget, Router, auto-routing
-- [x] TypeScript SDK: Budget, Router with matching logic
-- [x] Shared protocol definitions (JSON Schema)
-- [x] 19 tests passing across 3 languages
-
-### Phase 1 — The Harness ✅
-- [x] Semantic cache (skip LLM calls for similar queries — TF-IDF cosine, zero external deps)
-- [x] Security layer (subprocess sandbox, policy engine, default-deny)
-- [x] Tool output sanitization (7 threat categories, 5 severity levels)
-- [x] Built-in trace store with SQLite backend (WAL mode, retention, audit log)
-- [x] `archon traces` CLI command (list, show, stats, purge)
-
-### Phase 2 — Memory + Multi-Agent ✅
-- [x] Tiered memory (working/episodic/semantic/procedural) with temporal decay
-- [x] Automatic consolidation (expire old episodic, prune stale semantic)
-- [x] Multi-agent pipelines (sequential, parallel, hierarchical)
-- [x] Durable execution with SQLite-backed checkpointing + crash recovery
-- [x] Full TypeScript Agent class with LLM integration, routing, budget
-
-### Phase 3 — Production Polish ✅
-- [x] Built-in web dashboard (`archon dashboard` — dark theme, zero JS deps)
-- [x] Continuous evaluation (inline validators + async quality scoring + regression detection)
-- [x] Shadow deployments (run candidate in parallel, compare scores, promotion recommendation)
-- [x] Governance (event sourcing, RBAC for tool access, GDPR-compliant erasure)
-- [x] MCP client (stdio transport, tool discovery, to_archon_tools conversion)
-- [x] A2A protocol (Agent Cards, skill discovery, remote agent fetch)
-
----
-
 ## Comparison with Other Frameworks
 
 | Feature | LangGraph | CrewAI | Pydantic-AI | OpenAI SDK | **Archon** |
