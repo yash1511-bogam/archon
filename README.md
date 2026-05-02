@@ -24,8 +24,10 @@ The other 80% — cost control, security, observability, memory management, eval
 
 - **84% of companies** take a >6% gross margin hit from uncontrolled AI costs
 - **Only 15%** of GenAI deployments have any LLM observability
-- **Zero** major frameworks are secure by default (CodeSlick audit: 75-200 critical findings per framework)
+- **Zero** major frameworks are secure by default (CodeSlick audit: 75–200 critical findings per framework)
 - **40% of agentic AI projects** will be canceled by 2027 due to escalating costs (Gartner)
+
+---
 
 ## The Solution
 
@@ -63,21 +65,21 @@ Every run returns **cost, steps, and a trace URL**. Observability is not optiona
 
 | Problem | Every Other Framework | Archon |
 |---------|----------------------|--------|
-| **Cost** | Discover the bill at month-end. No routing, no budgets, no tracking. | Every LLM call auto-routed to cheapest sufficient model. Hard budget caps. Per-step cost tracking. **60-70% savings.** |
-| **Security** | `exec(llm_output)` in your process. No sandbox. No validation. | Sandboxed by default. Pre-execution policy checks. Tool output sanitization. Default-deny. |
-| **Observability** | "Integrate LangSmith ($39/seat/mo)" or Langfuse. Only 15% of deployments have monitoring. | Built-in trace store + web dashboard. Every step logged. Zero external tools needed. |
-| **Memory** | "Here's a vector store adapter. Good luck." No temporal awareness, no forgetting. | Tiered memory (working/episodic/semantic/procedural). Temporal decay. Automatic consolidation. Self-editing. |
-| **Evaluation** | "Write tests before deploy. Hope for the best." | Three layers: inline verification + async quality scoring + regression detection. Continuous, not just pre-deploy. |
-| **Setup** | Requires Python/Node expertise, virtual envs, YAML configs, scattered API keys. | `pip install archon-ai` and go. Or `pnpm add @archon-ai/sdk`. |
-| **Language** | 9 of 11 major frameworks are Python-only. | Python + TypeScript as first-class citizens from day one. |
+| **Cost** | Discover the bill at month-end | Auto-routes to cheapest sufficient model. Hard budget caps. Per-step tracking. **60–70% savings.** |
+| **Security** | `exec(llm_output)` in your process | Sandboxed by default. Pre-execution policy checks. Tool output sanitization. Default-deny. |
+| **Observability** | "Integrate LangSmith ($39/seat/mo)" | Built-in trace store + web dashboard. Every step logged. Zero external tools. |
+| **Memory** | "Here's a vector store adapter" | Tiered memory (working/episodic/semantic/procedural). Temporal decay. Auto-consolidation. |
+| **Evaluation** | "Write tests, hope for the best" | Inline verification + async quality scoring + regression detection. Continuous. |
+| **Governance** | No audit trails, no compliance | Event sourcing, RBAC, GDPR-compliant erasure. Immutable audit log. |
+| **Language** | 9 of 11 frameworks are Python-only | Python + TypeScript from day one. |
 
 ---
 
-## How It Works
+## Features
 
 ### The 5-Gate Execution Pipeline
 
-Every LLM call in Archon passes through 5 gates. This is the core architectural difference — the harness is in the execution loop, not outside it.
+Every LLM call passes through 5 gates — the harness is in the execution loop, not outside it.
 
 ```
 User Request
@@ -95,7 +97,7 @@ User Request
 │ Downgrade if budget pressure.               │
 ├─────────────────────────────────────────────┤
 │ Gate 3: EXECUTE                             │
-│ Call LLM via LiteLLM (100+ models).         │
+│ Call LLM via LiteLLM (140+ models).         │
 │ Run tool calls in sandboxed subprocess.     │
 │ Enforce timeout + token limits.             │
 ├─────────────────────────────────────────────┤
@@ -116,385 +118,249 @@ User Request
 
 ### Automatic Model Routing
 
-Archon classifies every input using pattern-based signals (zero LLM calls, zero added latency) and routes to the cheapest model that can handle it:
+Pattern-based complexity classification — zero LLM calls, zero added latency:
 
 | Tier | When | Default Models | Cost/MTok |
 |------|------|---------------|-----------|
-| **Simple** | Short queries, yes/no, formatting, greetings | Gemini 2.5 Flash, GPT-4.1 Nano | $0.15-0.50 |
-| **Standard** | Reasoning, code generation, analysis | Claude Sonnet 4.6, GPT-4.1 Mini | $1-3 |
-| **Complex** | Multi-step reasoning, architecture, proofs | Claude Opus 4.6, o4-mini | $5-25 |
+| **Simple** | Short queries, yes/no, formatting | Gemini 2.5 Flash, GPT-4.1 Nano | $0.10–0.50 |
+| **Standard** | Reasoning, code generation, analysis | Claude Sonnet 4.6, GPT-4.1 Mini | $1–3 |
+| **Complex** | Multi-step reasoning, architecture | Claude Opus 4.6, o4-mini | $5–25 |
 
-**Complexity signals** (27 total): word count, code blocks, multi-step keywords ("step 1", "first", "then", "finally"), analysis keywords ("analyze", "compare", "design", "optimize"), math keywords ("calculate", "prove", "algorithm"), and more.
-
-A typical workload (60% simple, 25% standard, 15% complex) saves **60-70%** vs sending everything to a frontier model.
-
-**Budget-aware downgrade**: When remaining budget drops below thresholds, the router automatically downgrades:
-- Complex → Standard when < $0.10 remaining
-- Standard → Simple when < $0.05 remaining
-
-```python
-# Explicit model — bypass routing
-agent = Agent(model="claude-sonnet-4.6", ...)
-
-# Auto routing — framework picks per step
-agent = Agent(model="auto", ...)
-
-# Custom tiers
-from archon import Router
-router = Router(models={
-    Tier.SIMPLE: ["deepseek-v3.2", "gemini-flash"],
-    Tier.STANDARD: ["claude-sonnet-4.6"],
-    Tier.COMPLEX: ["o4-mini"],
-})
-```
+A typical workload (60% simple, 25% standard, 15% complex) saves **60–70%** vs sending everything to a frontier model.
 
 ### Budget Enforcement
 
 Not a dashboard. Not an alert. A **hard stop**.
 
 ```python
-from archon import Budget
-
-budget = Budget(
-    max_per_run=0.50,       # Agent stops before exceeding $0.50
-    max_per_day=10.00,      # Daily cap across all runs
-    max_per_month=200.00,   # Monthly cap
-    warn_at=0.8,            # Warning at 80% of any limit
-)
-
-agent = Agent(name="researcher", budget=budget, ...)
-result = await agent.run("Complex research task")
-
-# If budget exceeded mid-run:
-# result.output = "[Budget exceeded after 7 steps, spent $0.4998]"
-# Agent stops gracefully — no surprise bills.
+budget = Budget(max_per_run=0.50, max_per_day=10.00, max_per_month=200.00)
 ```
 
-Budget state persists across restarts. Every LLM call is tracked with model, tokens, cost, and attribution tags.
+When the budget runs low, the router automatically downgrades to cheaper models. When it's exceeded, the agent stops gracefully and returns a partial result. No surprise bills.
 
-### Tool System
+### Tiered Memory
 
-Define tools with a simple decorator. Archon generates the JSON Schema automatically from type hints.
+Four tiers inspired by cognitive science:
+
+| Tier | What It Stores | Lifecycle |
+|------|---------------|-----------|
+| **Working** | Current task context (800–2K tokens) | Pinned in LLM context window |
+| **Episodic** | Past experiences with timestamps | Decays over time (configurable half-life) |
+| **Semantic** | Structured facts and relationships | Consolidated, stale entries pruned |
+| **Procedural** | Learned tool-use patterns | Grows from successful runs |
 
 ```python
-from archon import tool
+from archon import Memory, MemoryType
 
-@tool
-def search_web(query: str) -> str:
-    """Search the web for current information."""
-    return requests.get(f"https://api.search.com?q={query}").text
+memory = Memory(decay_half_life_hours=168)  # 7-day half-life
+memory.remember("user_pref", "Prefers concise answers", MemoryType.SEMANTIC)
+results = memory.recall("user preferences")
+```
 
-@tool
-def read_file(path: str) -> str:
-    """Read a file from the local filesystem."""
-    return Path(path).read_text()
+### Security
 
-@tool
-def calculate(expression: str) -> float:
-    """Evaluate a mathematical expression safely."""
-    return safe_eval(expression)
+Default-deny policy engine + subprocess sandbox:
 
-agent = Agent(
-    name="assistant",
-    instructions="Help the user with research and analysis.",
-    tools=[search_web, read_file, calculate],
-    model="auto",
+```python
+from archon import SecurityConfig, SecurityPolicy, PolicyRule, PolicyAction
+
+security = SecurityConfig(
+    sandbox=True,
+    policy=SecurityPolicy(rules=[
+        PolicyRule(tool="search_web", action=PolicyAction.ALLOW),
+        PolicyRule(tool="send_email", action=PolicyAction.REQUIRE_APPROVAL),
+    ]),
 )
 ```
 
-Each tool automatically gets:
-- JSON Schema generation from type hints (for LLM function calling)
-- Input validation before execution
-- Output sanitization before passing back to LLM
-- Cost tracking (tool calls count toward budget)
-- Trace logging (tool name, parameters, result, latency)
+Tool outputs are sanitized before passing to the LLM — 7 threat categories (instruction override, role hijack, prompt extraction, data exfiltration, delimiter injection, encoded payloads, embedded instructions).
+
+### Continuous Evaluation
+
+Three layers, not just pre-deploy tests:
+
+| Layer | When | What It Catches |
+|-------|------|----------------|
+| **Inline** | Every request | Schema failures, loops, cost overruns, tool inefficiency |
+| **Async** | Sampled traffic | Output quality, coherence, completeness |
+| **Regression** | Population-level | Score drops, cost spikes, failure rate increases |
+
+### Shadow Deployments
+
+Test new agent versions safely before promoting:
+
+```python
+from archon import ShadowRunner
+
+shadow = ShadowRunner(primary=current_agent, candidate=new_agent)
+comparison = await shadow.run("user prompt")
+print(comparison.recommendation)  # "PROMOTE — candidate scores 0.12 higher, $0.003 cheaper"
+```
+
+### Governance
+
+- **Event sourcing** — every agent action is an immutable event. Full replay and audit trail.
+- **RBAC** — role-based tool access. Agents get roles; roles define permissions.
+- **GDPR compliance** — right to access (data export) and right to erasure per user.
+
+### Web Dashboard
+
+```bash
+archon dashboard --port 8080
+```
+
+Dark-themed dashboard with stats grid, top models, run list, step-by-step detail, and audit log. Zero external JS dependencies.
+
+### CLI
+
+```bash
+archon traces list                    # Recent runs (table or JSON)
+archon traces show <run_id>           # Step-by-step detail + audit log
+archon traces stats                   # Aggregate stats with top models
+archon traces purge --before-days 30  # Delete old traces
+```
+
+### MCP & A2A Protocol Support
+
+Connect to any MCP server and use its tools as native Archon tools:
+
+```python
+from archon.protocols import MCPClient
+
+client = MCPClient("npx @modelcontextprotocol/server-github")
+client.connect()
+tools = client.to_archon_tools()  # Convert MCP tools → Archon ToolDef
+agent = Agent(tools=tools, ...)
+```
+
+Publish Agent Cards for cross-framework discovery via A2A:
+
+```python
+from archon.protocols import AgentCard, AgentSkill
+
+card = AgentCard(
+    name="researcher",
+    description="Finds and summarizes information",
+    url="https://example.com/agents/researcher",
+    skills=[AgentSkill(id="search", name="Web Search", description="Search the web")],
+)
+print(card.to_json())  # Serve at /.well-known/agent.json
+```
+
+### Multi-Agent Pipelines
+
+Sequential, parallel, and hierarchical orchestration with durable checkpointing:
+
+```python
+from archon import Pipeline, PipelineStep, Parallel, CheckpointStore
+
+pipeline = Pipeline(
+    steps=[
+        Parallel(steps=[                          # Run concurrently
+            PipelineStep(agent=market_analyst),
+            PipelineStep(agent=tech_analyst),
+        ]),
+        PipelineStep(                             # Then synthesize
+            agent=synthesizer,
+            input_fn=lambda ctx: f"Combine: {ctx['market_analyst']} + {ctx['tech_analyst']}",
+        ),
+    ],
+    checkpoint_store=CheckpointStore(),           # Crash recovery
+)
+
+result = await pipeline.run("Analyze the AI agent market")
+print(f"Total cost: ${result.total_cost_usd:.4f}")
+```
+
+If the pipeline crashes mid-run, re-running with the same `pipeline_id` skips completed steps automatically.
 
 ---
 
 ## Installation
 
-### Python (via uv — recommended)
-
 ```bash
+# Python (uv recommended)
 uv add archon-ai
 
-# Or with pip
-pip install archon-ai
-```
-
-### TypeScript (via pnpm — recommended)
-
-```bash
+# TypeScript (pnpm recommended)
 pnpm add @archon-ai/sdk
-
-# Or with npm
-npm install @archon-ai/sdk
 ```
 
-### From Source
+Set your API keys:
 
 ```bash
-git clone https://github.com/yash1511-bogam/archon.git
-cd archon
-
-# Rust core
-cargo build --manifest-path crates/archon-core/Cargo.toml
-
-# Python SDK
-cd sdks/python && uv sync
-
-# TypeScript SDK
-cd sdks/typescript && pnpm install && pnpm build
-```
-
----
-
-## Usage
-
-### Basic Agent (Python)
-
-```python
-import asyncio
-from archon import Agent, tool, Budget
-
-@tool
-def search(query: str) -> str:
-    """Search for information."""
-    return f"Results for: {query}"
-
-agent = Agent(
-    name="helper",
-    instructions="You are a helpful research assistant.",
-    tools=[search],
-    model="auto",
-    budget=Budget(max_per_run=1.00),
-)
-
-async def main():
-    result = await agent.run("What are the latest advances in quantum computing?")
-    print(f"Answer: {result.output}")
-    print(f"Cost: ${result.cost:.4f}")
-    print(f"Steps: {result.step_count}")
-    print(f"Models used: {result.model_usage}")
-
-asyncio.run(main())
-```
-
-### Basic Agent (TypeScript)
-
-```typescript
-import { Budget, Router } from "@archon-ai/sdk";
-
-// Budget enforcement
-const budget = new Budget({ maxPerRun: 0.50 });
-budget.check(0.10);  // OK
-budget.record(0.10);
-console.log(`Remaining: $${budget.remaining}`);  // $0.40
-
-// Model routing
-const router = new Router();
-const decision = router.route("Analyze this complex architecture");
-console.log(`Model: ${decision.model}`);  // claude-sonnet-4.6
-console.log(`Tier: ${decision.tier}`);    // standard
-```
-
-### Custom Model Tiers
-
-```python
-from archon import Router, Tier
-
-router = Router(models={
-    Tier.SIMPLE: ["deepseek-v3.2", "qwen-3.5-flash"],
-    Tier.STANDARD: ["claude-sonnet-4.6", "gpt-4.1-mini"],
-    Tier.COMPLEX: ["claude-opus-4.6", "o4-mini", "gemini-2.5-pro"],
-})
-
-# Route with budget awareness
-decision = router.route("Simple greeting", remaining_budget=0.03)
-# → Tier.SIMPLE, model="deepseek-v3.2"
-
-decision = router.route("Analyze and compare architectures with code examples")
-# → Tier.COMPLEX, model="claude-opus-4.6"
-```
-
-### Multi-Step Agent with Tools
-
-```python
-from archon import Agent, tool, Budget
-
-@tool
-def search_web(query: str) -> str:
-    """Search the web."""
-    return web_search_api(query)
-
-@tool
-def read_document(url: str) -> str:
-    """Read and extract text from a document URL."""
-    return extract_text(url)
-
-@tool
-def write_file(path: str, content: str) -> str:
-    """Write content to a file."""
-    Path(path).write_text(content)
-    return f"Written to {path}"
-
-agent = Agent(
-    name="research-writer",
-    instructions="""You are a research assistant. When given a topic:
-    1. Search for relevant sources
-    2. Read the most relevant documents
-    3. Write a comprehensive summary to a file""",
-    tools=[search_web, read_document, write_file],
-    model="auto",
-    budget=Budget(max_per_run=2.00),
-    max_steps=15,
-)
-
-result = await agent.run("Research the current state of AI agent frameworks in 2026")
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+# Or any of the 17 supported providers
 ```
 
 ---
 
 ## Supported Models (140+ across 17 providers)
 
-Archon ships a built-in model registry with pricing for every major model from 2024–2026. The router uses this registry for cost-aware model selection. **Azure AI Foundry is fully supported — not just Azure OpenAI, but all 11,000+ Foundry models including Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, and GLM.**
+Archon ships a built-in model registry with pricing for every major model from 2024–2026. **Azure AI Foundry is fully supported — not just Azure OpenAI, but all 11,000+ Foundry models including Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, and GLM.**
 
 ### Direct API Providers
 
-| Provider | Models | Price Range (Input $/MTok) | Highlights |
-|----------|--------|---------------------------|------------|
-| **OpenAI** | GPT-5.5, 5.4/Pro/Mini/Nano, 5.3 Codex, 5.2/Pro, 5.1, 5/Mini/Nano, 4.1/Mini/Nano, 4o/Mini, o3/Pro, o4-mini, GPT-OSS-120B | $0.05 – $30.00 | 1.1M context on GPT-5.4, model-router |
-| **Anthropic** | Claude Opus 4.7/4.6/4.5, Sonnet 4.6/4.5/4, Haiku 4.5/3.5 | $0.80 – $5.00 | 1M context flat-rate, 90% cache discount |
-| **Google** | Gemini 3.1/3 Pro, 3/2.5 Flash, 2.5/2.0 Flash-Lite, 1.5 Pro/Flash, Gemma 4/3 | $0.075 – $2.00 | 1M–2M context, free tiers |
-| **xAI** | Grok 4.20, 4, 4.1 Fast, Code Fast 1, 3, 3 Mini | $0.20 – $3.00 | 2M context, real-time X/web search |
-| **DeepSeek** | V4 Pro/Flash, V3.2/V3.1/V3, R2, R1 | $0.14 – $1.74 | 90% cache discount, Apache 2.0 |
-| **Meta** | Llama 4 Maverick/Scout, 3.3 70B, 3.1 405B/70B/8B | $0.05 – $3.00 | 10M context (Scout), fully open |
-| **Mistral** | Large 3, Small 4/3.2, Medium 3, Nemo, Codestral, Devstral 2 | $0.02 – $2.00 | EU AI Act compliant, MIT license |
-| **Alibaba** | Qwen 3.6 Plus, 3.5 Plus, 3 235B/32B/14B/8B | $0.00 – $0.455 | Free tier, 119 languages |
-| **Cohere** | Command A, R+, R, R7B, Embed, Rerank | $0.037 – $2.50 | RAG-optimized, multilingual |
-| **AI21** | Jamba 2 Large/Mini | $0.20 – $2.00 | 256K context |
-| **Microsoft** | Phi-4, Phi-4 Mini, Phi-4 Multimodal | $0.02 – $0.07 | Tiny but capable, open source |
-| **Moonshot** | Kimi K2.6, K2.5, K2 Thinking | $0.20 | 1M context, open source |
-| **Amazon** | Nova Pro, Lite, Micro | $0.035 – $0.80 | Bedrock-native |
-| **Perplexity** | Sonar Pro, Sonar | $1.00 – $3.00 | Built-in web search |
-| **Zhipu** | GLM-5 | $0.50 | MIT license, 744B MoE |
+| Provider | Key Models | Input $/MTok |
+|----------|-----------|-------------|
+| **OpenAI** | GPT-5.5, 5.4, 5.4 Pro, o3, o4-mini, GPT-4.1, GPT-OSS-120B | $0.05 – $30 |
+| **Anthropic** | Claude Opus 4.7, Sonnet 4.6, Haiku 4.5 | $0.80 – $5 |
+| **Google** | Gemini 3.1 Pro, 2.5 Flash, 2.0 Flash-Lite, Gemma 4 | $0.075 – $2 |
+| **xAI** | Grok 4.20, 4, 4.1 Fast, Code Fast 1 | $0.20 – $3 |
+| **DeepSeek** | V4 Pro/Flash, V3.2, R2, R1 | $0.14 – $1.74 |
+| **Meta** | Llama 4 Maverick/Scout, 3.3 70B | $0.05 – $3 |
+| **Mistral** | Large 3, Small 4, Nemo, Devstral 2 | $0.02 – $2 |
+| **Alibaba** | Qwen 3.6 Plus, 3.5 Plus, 3 235B | $0.00 – $0.46 |
+| **Others** | Cohere, AI21, Microsoft Phi, Moonshot Kimi, Amazon Nova, Perplexity, Zhipu GLM | $0.02 – $3 |
 
 ### Platform Support
 
-| Platform | What It Provides | How Archon Uses It |
-|----------|-----------------|-------------------|
-| **Azure AI Foundry** | 11,000+ models: GPT-5.x, Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, GLM, Cohere, model-router, NVIDIA NIMs, Hugging Face, Stability AI | Set `AZURE_API_KEY` + `AZURE_API_BASE` — use `azure/` prefix. Supports all Direct + Partner models. |
-| **AWS Bedrock** | Claude, Llama, Mistral, Cohere, Nova, Titan | Set `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` — use `bedrock/` prefix |
-| **OpenRouter** | 1,600+ models via single API | Set `OPENROUTER_API_KEY` — use `openrouter/` prefix |
-| **Groq** | LPU-accelerated Llama, DeepSeek, Mixtral (300–840 tok/s) | Set `GROQ_API_KEY` — use `groq/` prefix |
-| **Together AI** | Serverless open models (Llama, DeepSeek, Qwen) | Set `TOGETHER_API_KEY` — use `together_ai/` prefix |
-| **Fireworks AI** | Optimized inference for open models | Set `FIREWORKS_API_KEY` — use `fireworks_ai/` prefix |
-| **Cerebras** | Ultra-fast inference (920 tok/s) | Set `CEREBRAS_API_KEY` — use `cerebras/` prefix |
-
-### Using the Model Registry
+| Platform | What's Available | Usage |
+|----------|-----------------|-------|
+| **Azure AI Foundry** | 11,000+ models — GPT-5.x, Claude, Grok, DeepSeek, Llama, Mistral, Phi, Kimi, GLM, Cohere, model-router | `azure/` prefix |
+| **AWS Bedrock** | Claude, Llama, Mistral, Nova, Cohere, AI21 | `bedrock/` prefix |
+| **OpenRouter** | 1,600+ models via single API | `openrouter/` prefix |
+| **Groq** | LPU-accelerated Llama, DeepSeek (300–840 tok/s) | `groq/` prefix |
+| **Together AI** | Serverless open models | `together_ai/` prefix |
+| **Fireworks AI** | Optimized open model inference | `fireworks_ai/` prefix |
+| **Cerebras** | Ultra-fast inference (920 tok/s) | `cerebras/` prefix |
 
 ```python
 from archon.models import list_models, get_model, estimate_cost
 
-# Find all budget models under $0.20/MTok input
+# Find cheap models
 cheap = list_models(tier="budget", max_input_cost=0.20)
-for m in cheap[:5]:
-    print(f"{m.id:<25} ${m.input_cost:.3f} / ${m.output_cost:.3f}  {m.provider}")
-
-# Get pricing for a specific model
-gpt54 = get_model("gpt-5.4")
-print(f"GPT-5.4: ${gpt54.input_cost}/MTok in, ${gpt54.output_cost}/MTok out, {gpt54.context_window:,} ctx")
 
 # Estimate cost for a workload
 cost = estimate_cost("claude-sonnet-4.6", input_tokens=50_000, output_tokens=2_000)
-print(f"Estimated cost: ${cost:.4f}")
 
 # Filter by capability
-reasoning = list_models(is_reasoning=True)
-open_source = list_models(is_open_source=True, min_context=1_000_000)
-vision = list_models(supports_vision=True, max_input_cost=1.00)
+reasoning_models = list_models(is_reasoning=True)
+open_models = list_models(is_open_source=True, min_context=1_000_000)
 ```
 
 ---
 
-## Integration with Other Frameworks & Tools
+## Integration with Other Frameworks
 
-Archon is designed to work **alongside** existing tools, not replace everything.
-
-### With MCP (Model Context Protocol)
-
-Archon tools are compatible with MCP. Use any MCP server as an Archon tool:
+Archon works **alongside** existing tools — use what you need:
 
 ```python
-# Use MCP servers as Archon tools (planned)
-from archon.mcp import from_mcp_server
-
-github_tools = from_mcp_server("npx @modelcontextprotocol/server-github")
-agent = Agent(tools=github_tools, ...)
-```
-
-### With LangChain / LangGraph
-
-Use Archon's router and budget engine inside LangChain workflows:
-
-```python
+# With LangChain / LangGraph — use Archon's router and budget
 from archon import Router, Budget
+decision = Router().route(user_input, Budget(max_per_run=1.00).remaining)
 
-router = Router()
-budget = Budget(max_per_run=1.00)
-
-# Use Archon's routing decision in your LangChain chain
-decision = router.route(user_input, budget.remaining)
-# → Use decision.model as the model for your LangChain LLM call
-
-# Track cost after each LangChain call
-budget.record(actual_cost)
-```
-
-### With CrewAI
-
-Use Archon's budget tracking to wrap CrewAI crews:
-
-```python
-from archon import Budget
-
+# With CrewAI — wrap crews with budget tracking
 budget = Budget(max_per_run=5.00)
+budget.check(estimated_cost)  # Before each task
+budget.record(actual_cost)    # After each task
 
-# Before each CrewAI task
-budget.check(estimated_cost)
-# After each task
-budget.record(actual_cost)
-```
+# With Pydantic-AI — types are directly compatible (both use Pydantic 2)
+from archon.types import AgentResult, Step  # Serialize, validate, compose freely
 
-### With Pydantic-AI
-
-Archon uses Pydantic 2 natively — types are directly compatible:
-
-```python
-from archon.types import AgentResult, Step
-# These are Pydantic BaseModel instances — serialize, validate, compose freely
-```
-
-### With OpenTelemetry
-
-Export Archon traces to any OTLP-compatible backend (Datadog, Grafana, Jaeger):
-
-```python
-# Planned: OTLP export
-from archon.trace import TraceStore
-traces = TraceStore(export=["otlp"])
-```
-
-### With Vector Databases
-
-Archon's memory layer (planned) works with any vector store:
-
-```python
-# Planned: pluggable memory backends
-from archon.memory import Memory
-memory = Memory(
-    semantic_backend="pgvector",  # or "qdrant", "chroma", "pinecone"
-)
+# With OpenTelemetry — export traces to Datadog, Grafana, Jaeger
+# Built-in OTLP export support
 ```
 
 ---
@@ -503,95 +369,48 @@ memory = Memory(
 
 ```
 archon/
-├── crates/archon-core/        # Rust core runtime
-│   ├── src/types.rs           #   Step, RunResult, BudgetConfig, Tier
-│   ├── src/budget.rs          #   Budget tracker with hard enforcement
-│   ├── src/router.rs          #   Pattern-based complexity classifier (27 signals)
-│   └── src/trace.rs           #   SQLite trace store + immutable audit log
-│
-├── sdks/python/               # Python SDK (uv + hatchling)
+├── crates/archon-core/        # Rust core — types, budget, router, trace store
+├── sdks/python/               # Python SDK (uv + Pydantic 2 + LiteLLM)
 │   └── src/archon/
-│       ├── agent.py           #   Agent class — the core API
-│       ├── types.py           #   Pydantic 2 models
-│       ├── tool.py            #   @tool decorator → JSON Schema
-│       ├── budget/            #   Budget with hard caps
-│       ├── router/            #   Pattern classifier (mirrors Rust)
-│       ├── memory/            #   Tiered memory (planned)
-│       ├── security/          #   Sandbox + policy engine (planned)
-│       ├── trace/             #   Trace store (planned)
-│       └── eval/              #   Continuous evaluation (planned)
-│
-├── sdks/typescript/           # TypeScript SDK (pnpm + vitest)
+│       ├── agent.py           #   Agent with 5-gate execution pipeline
+│       ├── models.py          #   140+ model registry with pricing
+│       ├── cache.py           #   Semantic cache (TF-IDF, zero deps)
+│       ├── sanitize.py        #   Tool output sanitization (7 threat categories)
+│       ├── pipeline.py        #   Multi-agent pipelines + checkpointing
+│       ├── dashboard.py       #   Built-in web dashboard
+│       ├── shadow.py          #   Shadow deployments
+│       ├── governance.py      #   Event sourcing, RBAC, GDPR
+│       ├── protocols.py       #   MCP client + A2A Agent Cards
+│       ├── cli.py             #   archon CLI (traces, dashboard)
+│       ├── budget/            #   Budget enforcement
+│       ├── router/            #   Pattern-based model routing
+│       ├── memory/            #   Tiered memory system
+│       ├── security/          #   Sandbox + policy engine
+│       ├── trace/             #   SQLite trace store
+│       └── eval/              #   Continuous evaluation engine
+├── sdks/typescript/           # TypeScript SDK (pnpm + Zod)
 │   └── src/
-│       ├── types.ts           #   Zod-based types
-│       ├── budget.ts          #   Budget (matches Python)
-│       └── router.ts          #   Router (matches Python)
-│
-└── proto/                     # Shared protocol definitions
-    ├── schema.json            #   JSON Schema for all types
-    └── README.md              #   Classification spec
+│       ├── agent.ts           #   Full Agent with LLM integration
+│       ├── budget.ts          #   Budget enforcement
+│       └── router.ts          #   Pattern-based routing
+└── proto/                     # Shared protocol (JSON Schema)
 ```
 
-### Why This Architecture
-
-**Rust core** — The execution engine, sandbox, trace store, and budget engine are in Rust for three reasons:
-1. **Single binary distribution** — users run `brew install archon`, no Python/Node dependency
-2. **Memory-safe sandboxing** — direct access to seccomp/Landlock/Seatbelt syscalls
-3. **Performance** — trace storage and budget tracking are hot paths
-
-**Python SDK (PyO3)** — Thin wrapper around the Rust core. Uses Pydantic 2 for type safety and JSON Schema generation. LiteLLM for 100+ model support.
-
-**TypeScript SDK (napi-rs)** — Thin wrapper around the same Rust core. Uses Zod for type safety. Feature parity with Python.
-
-**Shared protocol** — JSON Schema definitions ensure all three implementations agree on types, classification thresholds, and behavior.
+**Why Rust + Python + TypeScript?**
+- **Rust core** — single binary, memory-safe sandboxing, fast trace storage
+- **Python SDK** — Pydantic 2 types, LiteLLM for 140+ models, uv for packaging
+- **TypeScript SDK** — Zod types, fetch-based LLM calls, pnpm for packaging
 
 ---
 
 ## Development
 
-### Prerequisites
-
-- Rust 1.75+ (for core)
-- Python 3.10+ with [uv](https://docs.astral.sh/uv/)
-- Node.js 20+ with [pnpm](https://pnpm.io/)
-
-### Build Everything
-
 ```bash
-make build
-```
+# Prerequisites: Rust 1.75+, Python 3.10+ (uv), Node.js 20+ (pnpm)
 
-### Run All Tests
-
-```bash
-make test
-# Runs: 4 Rust + 112 Python + 10 TypeScript = 126 tests
-```
-
-### Individual Components
-
-```bash
-# Rust core
-cargo build --manifest-path crates/archon-core/Cargo.toml
-cargo test --manifest-path crates/archon-core/Cargo.toml --lib
-
-# Python SDK
-cd sdks/python
-uv sync
-uv run python -m pytest tests/ -v
-
-# TypeScript SDK
-cd sdks/typescript
-pnpm install
-pnpm build
-pnpm test
-```
-
-### Lint
-
-```bash
-make lint
-# Runs: ruff (Python) + tsc --noEmit (TypeScript)
+make build    # Build all three
+make test     # 4 Rust + 112 Python + 10 TypeScript = 126 tests
+make lint     # ruff (Python) + tsc --noEmit (TypeScript)
 ```
 
 ---
@@ -600,43 +419,43 @@ make lint
 
 | Feature | LangGraph | CrewAI | Pydantic-AI | OpenAI SDK | **Archon** |
 |---------|-----------|--------|-------------|------------|-----------|
-| Built-in model routing | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Budget enforcement | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Per-step cost tracking | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Semantic cache | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Sandboxed by default | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Pre-execution policy | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Tool output sanitization | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Built-in trace store | ✗ (LangSmith $) | ✗ | ✗ | Partial | **✓** |
-| CLI for traces | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Tiered memory | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Continuous eval | ✗ | ✗ | Partial | ✗ | **✓** |
-| Python + TypeScript | ✗ | ✗ | ✗ | ✗ | **✓** |
-| MCP support | ✓ | ✓ | ✓ | ✓ | **✓** |
-| Durable execution | ✓ | ✗ | ✓ (ext.) | ✗ | **✓** |
+| Built-in model routing | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Budget enforcement | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Per-step cost tracking | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Semantic cache | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Sandbox by default | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Pre-execution policy | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Output sanitization | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Built-in traces | ✗ (LangSmith $) | ✗ | ✗ | Partial | ✓ |
+| Tiered memory | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Continuous eval | ✗ | ✗ | Partial | ✗ | ✓ |
+| Shadow deployments | ✗ | ✗ | ✗ | ✗ | ✓ |
+| Governance / GDPR | ✗ | ✗ | ✗ | ✗ | ✓ |
+| MCP + A2A | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Durable execution | ✓ | ✗ | ✓ (ext.) | ✗ | ✓ |
+| Python + TypeScript | ✗ | ✗ | ✗ | ✗ | ✓ |
 
-**Archon doesn't compete with these frameworks on orchestration patterns.** LangGraph's graph model, CrewAI's role-based teams, and Pydantic-AI's DX are excellent. Archon competes on the **production harness** — the infrastructure layer that makes any agent safe, cheap, and observable.
+Archon doesn't compete on orchestration patterns. LangGraph's graphs, CrewAI's teams, and Pydantic-AI's DX are excellent. Archon competes on the **production harness** — the infrastructure that makes any agent safe, cheap, and observable.
 
 ---
 
 ## Philosophy
 
-1. **Secure by default** — Unsafe mode requires explicit opt-in, not the other way around.
-2. **Cost-aware by default** — Every LLM call is tracked, budgeted, and routable.
-3. **Observable by default** — Every step emits structured traces. No external tools required.
-4. **Thin orchestration** — Business logic in separate functions. The framework coordinates, not imprisons.
+1. **Secure by default** — unsafe mode requires explicit opt-in.
+2. **Cost-aware by default** — every LLM call is tracked, budgeted, and routable.
+3. **Observable by default** — every step emits structured traces. No external tools required.
+4. **Thin orchestration** — business logic in separate functions. The framework coordinates, not imprisons.
 5. **Dual-language** — Python and TypeScript as first-class citizens.
-6. **Zero-dependency setup** — SQLite for everything by default. No Redis, no Postgres, no Docker required.
+6. **Zero-dependency setup** — SQLite for everything. No Redis, no Postgres, no Docker required.
 
 ---
 
 ## Contributing
 
-Contributions welcome. See the [proto/README.md](proto/README.md) for the shared protocol spec that all implementations must follow.
+Contributions welcome. See [proto/README.md](proto/README.md) for the shared protocol spec.
 
 ```bash
-# Run the full test suite before submitting
-make test
+make test  # Run the full suite before submitting
 ```
 
 ---
