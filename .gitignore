@@ -1,0 +1,59 @@
+# ── Rust ───────────────────────────────────────────────
+/target/
+crates/*/target/
+**/*.rs.bk
+
+# ── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+*.so
+*.dylib
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── TypeScript / Node ──────────────────────────────────
+node_modules/
+sdks/typescript/dist/
+*.tsbuildinfo
+.eslintcache
+
+# ── IDE ────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── OS ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Environment & Secrets ──────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Build Artifacts ────────────────────────────────────
+*.whl
+*.tar.gz
+*.zip
+
+# ── Database ───────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
