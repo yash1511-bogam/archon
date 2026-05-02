@@ -9,9 +9,9 @@
   <img src="https://github.com/yash1511-bogam/archon/actions/workflows/ci.yml/badge.svg" alt="CI">
   <img src="https://img.shields.io/pypi/v/archon-framework?label=pypi" alt="PyPI">
   <img src="https://img.shields.io/npm/v/@archon-ai/sdk?label=npm" alt="npm">
-  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
-  <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
-  <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python">
+  <img src="https://img.shields.io/badge/typescript-6.0%2B-blue" alt="TypeScript">
+  <img src="https://img.shields.io/badge/rust-2024-orange" alt="Rust">
   <img src="https://img.shields.io/badge/tests-128%20passing-green" alt="Tests">
   <img src="https://img.shields.io/badge/models-140%2B%20registered-blue" alt="Models">
   <img src="https://img.shields.io/badge/providers-17%2B-blue" alt="Providers">
@@ -378,7 +378,7 @@ from archon.types import AgentResult, Step  # Serialize, validate, compose freel
 ```
 archon/
 ├── crates/archon-core/        # Rust core — types, budget, router, trace store
-├── sdks/python/               # Python SDK (uv + Pydantic 2 + LiteLLM)
+├── sdks/python/               # Python SDK (uv + Pydantic 2.13 + LiteLLM)
 │   └── src/archon/
 │       ├── agent.py           #   Agent with 5-gate execution pipeline
 │       ├── models.py          #   140+ model registry with pricing
@@ -396,7 +396,7 @@ archon/
 │       ├── security/          #   Sandbox + policy engine
 │       ├── trace/             #   SQLite trace store
 │       └── eval/              #   Continuous evaluation engine
-├── sdks/typescript/           # TypeScript SDK (pnpm + Zod)
+├── sdks/typescript/           # TypeScript SDK (pnpm + Zod 4)
 │   └── src/
 │       ├── agent.ts           #   Full Agent with LLM integration
 │       ├── budget.ts          #   Budget enforcement
@@ -406,15 +406,15 @@ archon/
 
 **Why Rust + Python + TypeScript?**
 - **Rust core** — single binary, memory-safe sandboxing, fast trace storage
-- **Python SDK** — Pydantic 2 types, LiteLLM for 140+ models, uv for packaging
-- **TypeScript SDK** — Zod types, fetch-based LLM calls, pnpm for packaging
+- **Python SDK** — Pydantic 2.13 types, LiteLLM for 140+ models, uv for packaging
+- **TypeScript SDK** — Zod 4 types, fetch-based LLM calls, pnpm for packaging
 
 ---
 
 ## Development
 
 ```bash
-# Prerequisites: Rust 1.75+, Python 3.10+ (uv), Node.js 20+ (pnpm)
+# Prerequisites: Rust 1.85+, Python 3.11+ (uv), Node.js 22+ (pnpm)
 
 make build    # Build all three
 make test     # 4 Rust + 114 Python + 10 TypeScript = 128 tests

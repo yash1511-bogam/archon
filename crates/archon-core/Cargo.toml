@@ -1,27 +1,28 @@
 [package]
 name = "archon-core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 description = "Core runtime for the Archon AI agent framework"
 license = "Apache-2.0"
-repository = "https://github.com/archon-ai/archon"
+repository = "https://github.com/yash1511-bogam/archon"
 
 [lib]
 name = "archon_core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1"
-regex = "1"
-tokio = { version = "1", features = ["full"] }
-uuid = { version = "1", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "2"
+regex = "1.12"
+tokio = { version = "1.52", features = ["full"] }
+uuid = { version = "1.23", features = ["v4"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
-pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
+rusqlite = { version = "0.39", features = ["bundled"] }
+pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 
 [features]
 default = []

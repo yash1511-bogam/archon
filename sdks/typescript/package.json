@@ -11,7 +11,7 @@
   },
   "homepage": "https://github.com/yash1511-bogam/archon",
   "keywords": ["ai", "agents", "llm", "framework", "production", "budget", "routing"],
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@10.33.2",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,7 +23,7 @@
   },
   "files": ["dist"],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc",
@@ -33,12 +33,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.24.0"
+    "zod": "^4.4.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.8.0",
-    "vitest": "^3.2.0",
-    "eslint": "^9.0.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5",
+    "eslint": "^10.3.0"
   }
 }
