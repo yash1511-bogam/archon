@@ -7,6 +7,7 @@ Budget-aware: automatically downgrades when funds are low.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from archon.types import Tier
@@ -28,6 +29,19 @@ MULTI_STEP_PHRASES = frozenset({
     "step 1", "first,", "then,", "finally,",
     "after that", "next,",
 })
+
+# Compiled word-boundary patterns — prevents "designer" matching "design"
+# Matches the keyword as a complete word or with verb suffixes (ed, ing, tion, ize, ation)
+# but not noun agent suffixes (er, ist, ment) to avoid false positives.
+_VERB_SUFFIX = r"(?:e?d|e?s|ing|tion|ation|ize|ized)?"
+_ANALYSIS_RE = re.compile(
+    r"\b(?:" + "|".join(ANALYSIS_KEYWORDS) + r")" + _VERB_SUFFIX + r"\b",
+    re.IGNORECASE,
+)
+_MATH_RE = re.compile(
+    r"\b(?:" + "|".join(MATH_KEYWORDS) + r")" + _VERB_SUFFIX + r"\b",
+    re.IGNORECASE,
+)
 
 # ── Scoring weights ────────────────────────────────────
 
@@ -129,16 +143,12 @@ class Router:
         if any(keyword in text for keyword in ("def ", "function ", "class ")):
             score += CODE_KEYWORD_SCORE
 
-        # Keyword signals
+        # Keyword signals (word-boundary matching)
         for phrase in MULTI_STEP_PHRASES:
             if phrase in lower:
                 score += MULTI_STEP_SCORE
-        for keyword in ANALYSIS_KEYWORDS:
-            if keyword in lower:
-                score += ANALYSIS_SCORE
-        for keyword in MATH_KEYWORDS:
-            if keyword in lower:
-                score += MATH_SCORE
+        score += len(_ANALYSIS_RE.findall(lower)) * ANALYSIS_SCORE
+        score += len(_MATH_RE.findall(lower)) * MATH_SCORE
 
         if score <= SIMPLE_MAX_SCORE:
             return Tier.SIMPLE

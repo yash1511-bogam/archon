@@ -107,16 +107,14 @@ def create_app(db_path: Path | str | None = None) -> Any:
     default_db = Path.home() / ".archon" / "traces.db"
     store_path = Path(db_path) if db_path else default_db
 
-    def _store() -> TraceStore:
-        return TraceStore(store_path)
+    # Shared store instance — avoids opening a new connection per request
+    shared_store = TraceStore(store_path)
 
     # ── Routes ─────────────────────────────────────────
 
     async def dashboard(request: Any) -> HTMLResponse:
-        store = _store()
-        stats = store.stats()
-        recent = store.list_runs(limit=10)
-        store.close()
+        stats = shared_store.stats()
+        recent = shared_store.list_runs(limit=10)
 
         stats_html = f"""
         <h1>Dashboard</h1>
@@ -162,23 +160,18 @@ def create_app(db_path: Path | str | None = None) -> Any:
         ))
 
     async def runs_page(request: Any) -> HTMLResponse:
-        store = _store()
-        runs = store.list_runs(limit=100)
-        store.close()
+        runs = shared_store.list_runs(limit=100)
         runs_html = _render_runs_table(runs)
         return HTMLResponse(_page("Runs", f"<h1>All Runs</h1>{runs_html}", nav_active="runs"))
 
     async def run_detail(request: Any) -> HTMLResponse:
         run_id = request.path_params["run_id"]
-        store = _store()
-        run = store.get_run(run_id)
+        run = shared_store.get_run(run_id)
         if not run:
-            store.close()
             return HTMLResponse(_page("Not Found", '<p class="empty">Run not found.</p>'), status_code=404)
 
-        steps = store.get_steps(run_id)
-        audit = store.get_audit(run_id)
-        store.close()
+        steps = shared_store.get_steps(run_id)
+        audit = shared_store.get_audit(run_id)
 
         # Run summary
         body = f"""
@@ -221,15 +214,11 @@ def create_app(db_path: Path | str | None = None) -> Any:
         return HTMLResponse(_page(f"Run {run_id[:12]}", body))
 
     async def api_stats(request: Any) -> JSONResponse:
-        store = _store()
-        stats = store.stats()
-        store.close()
+        stats = shared_store.stats()
         return JSONResponse(stats)
 
     async def api_runs(request: Any) -> JSONResponse:
-        store = _store()
-        runs = store.list_runs(limit=100)
-        store.close()
+        runs = shared_store.list_runs(limit=100)
         return JSONResponse([{
             "run_id": r.run_id, "agent": r.agent, "steps": r.total_steps,
             "cost": r.total_cost, "tokens": r.total_tokens,

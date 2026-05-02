@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Any
 
 
+from archon.security import PolicyAction
+
+
 # ══════════════════════════════════════════════════════
 # Event Sourcing
 # ══════════════════════════════════════════════════════
@@ -148,7 +151,30 @@ class EventStore:
 
     def replay(self, run_id: str) -> list[Event]:
         """Replay all events for a run in chronological order."""
-        return list(reversed(self.get_events(run_id=run_id, limit=10000)))
+        rows = self._conn.execute(
+            "SELECT id, event_type, agent, run_id, user_id, data, timestamp"
+            " FROM events WHERE run_id = ? ORDER BY id ASC LIMIT 10000",
+            (run_id,),
+        ).fetchall()
+        return [
+            Event(
+                event_id=r[0], event_type=EventType(r[1]), agent=r[2],
+                run_id=r[3], user_id=r[4], data=json.loads(r[5]), timestamp=r[6],
+            )
+            for r in rows
+        ]
+
+    def delete_by_user(self, user_id: str) -> int:
+        """Delete all events for a user. Returns count of deleted rows.
+
+        Used by GDPRManager for right-to-erasure. Prefer this over
+        accessing _conn directly.
+        """
+        cursor = self._conn.execute(
+            "DELETE FROM events WHERE user_id = ?", (user_id,),
+        )
+        self._conn.commit()
+        return cursor.rowcount
 
     def close(self) -> None:
         self._conn.close()
@@ -204,37 +230,37 @@ class RBACManager:
             raise ValueError(f"Role '{role_name}' not found")
         self._assignments[principal] = role_name
 
-    def check(self, principal: str, tool_name: str) -> str:
+    def check(self, principal: str, tool_name: str) -> PolicyAction:
         """Check if a principal can use a tool.
 
         Returns:
-            "allow", "deny", or "require_approval"
+            PolicyAction.ALLOW, PolicyAction.DENY, or PolicyAction.REQUIRE_APPROVAL
         """
         role_name = self._assignments.get(principal)
         if not role_name:
-            return "deny"  # No role assigned = denied
+            return PolicyAction.DENY
 
         role = self._roles.get(role_name)
         if not role:
-            return "deny"
+            return PolicyAction.DENY
 
         # Deny overrides everything
         if tool_name in role.deny_tools:
-            return "deny"
+            return PolicyAction.DENY
 
         # Check approval requirement
         if tool_name in role.require_approval_tools:
-            return "require_approval"
+            return PolicyAction.REQUIRE_APPROVAL
 
         # Check allow list
         if role.allow_tools and tool_name in role.allow_tools:
-            return "allow"
+            return PolicyAction.ALLOW
 
         # If allow_tools is empty, allow all (except denied)
         if not role.allow_tools:
-            return "allow"
+            return PolicyAction.ALLOW
 
-        return "deny"
+        return PolicyAction.DENY
 
     def get_role(self, principal: str) -> Role | None:
         """Get the role assigned to a principal."""
@@ -296,8 +322,8 @@ class GDPRManager:
         memory_count = 0
         if self._memory_conn:
             row = self._memory_conn.execute(
-                "SELECT COUNT(*) FROM memories WHERE metadata LIKE ?",
-                (f'%"user_id": "{user_id}"%',),
+                "SELECT COUNT(*) FROM memories WHERE json_extract(metadata, '$.user_id') = ?",
+                (user_id,),
             ).fetchone()
             memory_count = row[0] if row else 0
 
@@ -315,22 +341,18 @@ class GDPRManager:
 
         Deletes events and memory entries. The erasure itself is logged.
         """
-        # Count before deletion
-        events = self.event_store.get_events(user_id=user_id, limit=100000)
-        events_count = len(events)
+        # Count events before deletion for the audit log
+        pre_count = len(self.event_store.get_events(user_id=user_id, limit=100000))
 
-        # Delete events (except the erasure log itself)
-        self.event_store._conn.execute(
-            "DELETE FROM events WHERE user_id = ?", (user_id,)
-        )
-        self.event_store._conn.commit()
+        # Delete events via public API (not private _conn)
+        events_count = self.event_store.delete_by_user(user_id)
 
-        # Delete memory entries
+        # Delete memory entries using json_extract for safe matching
         memory_count = 0
         if self._memory_conn:
             cursor = self._memory_conn.execute(
-                "DELETE FROM memories WHERE metadata LIKE ?",
-                (f'%"user_id": "{user_id}"%',),
+                "DELETE FROM memories WHERE json_extract(metadata, '$.user_id') = ?",
+                (user_id,),
             )
             memory_count = cursor.rowcount
             self._memory_conn.commit()

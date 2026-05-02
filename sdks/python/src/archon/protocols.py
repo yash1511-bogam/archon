@@ -16,6 +16,7 @@ Both protocols follow the industry standards:
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ class MCPClient:
 
     def connect(self) -> None:
         """Start the MCP server subprocess."""
-        parts = self.command.split()
+        parts = shlex.split(self.command)
         self._process = subprocess.Popen(
             parts,
             stdin=subprocess.PIPE,

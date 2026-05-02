@@ -33,7 +33,7 @@ from archon.budget import Budget, BudgetExceeded
 from archon.cache import SemanticCache
 from archon.router import Router, RoutingDecision
 from archon.sanitize import Sanitizer
-from archon.security import PolicyAction, SecurityConfig
+from archon.security import PolicyAction, Sandbox, SecurityConfig
 from archon.tool import ToolDef
 from archon.trace import TraceStore
 from archon.types import AgentResult, Step, Tier
@@ -84,6 +84,14 @@ class Agent:
         self.trace_store = trace_store
         self._sanitizer = Sanitizer(strict=sanitize) if sanitize else None
         self._router = Router()
+        self._sandbox = (
+            Sandbox(
+                timeout_seconds=self.security.sandbox_timeout,
+                max_output_size=self.security.max_output_size,
+            )
+            if self.security.sandbox
+            else None
+        )
 
     async def run(self, prompt: str) -> AgentResult:
         """Execute the agent loop with the full production harness.
@@ -93,6 +101,10 @@ class Agent:
         """
         run_id = str(uuid.uuid4())
         result = AgentResult(run_id=run_id, output="", started_at=datetime.now(timezone.utc))
+
+        # Register the run in the trace store immediately (correct timestamp)
+        if self.trace_store:
+            self.trace_store.start_run(run_id, self.name, "")
 
         self._audit(run_id, "run_started", prompt[:200])
 
@@ -159,7 +171,6 @@ class Agent:
 
         if self.trace_store:
             self.trace_store.record_step(self.name, run_id, cache_step)
-            self.trace_store.start_run(run_id, self.name, "")
             self.trace_store.finish_run(run_id, result.output, 0.0, 1, 0, 0)
 
         self._audit(run_id, "cache_hit")
@@ -277,8 +288,19 @@ class Agent:
             return f"[Unknown tool: {fn_name}]"
 
         try:
-            raw_result = tool_map[fn_name].fn(**args)
-            return str(raw_result)
+            tool_def = tool_map[fn_name]
+            if self._sandbox:
+                # Run in isolated subprocess
+                import inspect
+                source = inspect.getsource(tool_def.fn)
+                sandbox_result = self._sandbox.execute(source, tool_def.fn.__name__, args)
+                if sandbox_result.error:
+                    self._audit(run_id, "tool_sandbox_error", f"{fn_name}: {sandbox_result.error}")
+                    return f"[Sandbox error: {sandbox_result.error}]"
+                return sandbox_result.output
+            else:
+                raw_result = tool_def.fn(**args)
+                return str(raw_result)
         except Exception as exc:
             self._audit(run_id, "tool_error", f"{fn_name}: {exc}")
             return f"[Tool error: {exc}]"
@@ -325,7 +347,6 @@ class Agent:
 
         if self.trace_store:
             total_tokens = result.total_input_tokens + result.total_output_tokens
-            self.trace_store.start_run(run_id, self.name, "")
             self.trace_store.finish_run(
                 run_id, result.output, result.total_cost_usd,
                 len(result.steps), total_tokens, result.total_latency_ms,
