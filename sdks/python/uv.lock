@@ -185,6 +185,7 @@ name = "archon-ai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
@@ -200,6 +201,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.1" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "litellm", specifier = ">=1.60" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },

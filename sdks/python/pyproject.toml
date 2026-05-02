@@ -22,7 +22,11 @@ dependencies = [
     "pydantic>=2.12",
     "litellm>=1.60",
     "httpx>=0.28",
+    "click>=8.1",
 ]
+
+[project.scripts]
+archon = "archon.cli:main"
 
 [project.optional-dependencies]
 dev = [

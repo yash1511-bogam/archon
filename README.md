@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/tests-19%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-54%20passing-green" alt="Tests">
 </p>
 
 ---
@@ -568,12 +568,12 @@ make lint
 - [x] Shared protocol definitions (JSON Schema)
 - [x] 19 tests passing across 3 languages
 
-### Phase 1 — The Harness (Next)
-- [ ] Semantic cache (skip LLM calls for similar queries)
-- [ ] Security layer (subprocess sandbox, seccomp, policy engine)
-- [ ] Tool output sanitization (strip injection patterns)
-- [ ] Built-in trace store with SQLite backend
-- [ ] `archon traces` CLI command
+### Phase 1 — The Harness ✅
+- [x] Semantic cache (skip LLM calls for similar queries — TF-IDF cosine, zero external deps)
+- [x] Security layer (subprocess sandbox, policy engine, default-deny)
+- [x] Tool output sanitization (7 threat categories, 5 severity levels)
+- [x] Built-in trace store with SQLite backend (WAL mode, retention, audit log)
+- [x] `archon traces` CLI command (list, show, stats, purge)
 
 ### Phase 2 — Memory + Multi-Agent
 - [ ] Tiered memory (working/episodic/semantic/procedural)
@@ -598,11 +598,13 @@ make lint
 | Built-in model routing | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Budget enforcement | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Per-step cost tracking | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Sandboxed by default | ✗ | ✗ | ✗ | ✗ | **✓** (planned) |
-| Pre-execution policy | ✗ | ✗ | ✗ | ✗ | **✓** (planned) |
-| Tool output validation | ✗ | ✗ | ✗ | ✗ | **✓** (planned) |
+| Semantic cache | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Sandboxed by default | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Pre-execution policy | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Tool output sanitization | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Built-in trace store | ✗ (LangSmith $) | ✗ | ✗ | Partial | **✓** |
+| CLI for traces | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Tiered memory | ✗ | ✗ | ✗ | ✗ | **✓** (planned) |
-| Built-in trace store | ✗ (LangSmith $) | ✗ | ✗ | Partial | **✓** (planned) |
 | Continuous eval | ✗ | ✗ | Partial | ✗ | **✓** (planned) |
 | Python + TypeScript | ✗ | ✗ | ✗ | ✗ | **✓** |
 | MCP support | ✓ | ✓ | ✓ | ✓ | **✓** (planned) |
