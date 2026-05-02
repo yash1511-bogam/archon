@@ -290,9 +290,16 @@ class Agent:
         try:
             tool_def = tool_map[fn_name]
             if self._sandbox:
-                # Run in isolated subprocess
+                # Run in isolated subprocess when possible
                 import inspect
-                source = inspect.getsource(tool_def.fn)
+                try:
+                    source = inspect.getsource(tool_def.fn)
+                except OSError:
+                    # Closures, lambdas, REPL-defined functions can't be inspected.
+                    # Fall back to direct execution with a warning.
+                    self._audit(run_id, "sandbox_fallback", f"{fn_name}: source unavailable")
+                    raw_result = tool_def.fn(**args)
+                    return str(raw_result)
                 sandbox_result = self._sandbox.execute(source, tool_def.fn.__name__, args)
                 if sandbox_result.error:
                     self._audit(run_id, "tool_sandbox_error", f"{fn_name}: {sandbox_result.error}")

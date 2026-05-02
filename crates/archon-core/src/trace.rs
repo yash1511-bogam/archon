@@ -2,6 +2,33 @@ use crate::types::Step;
 use rusqlite::{params, Connection};
 use std::path::Path;
 
+/// Schema SQL shared between file-backed and in-memory stores.
+const SCHEMA: &str = "\
+CREATE TABLE IF NOT EXISTS traces (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    tier TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cost_usd REAL NOT NULL,
+    latency_ms INTEGER NOT NULL,
+    tool_call TEXT,
+    cached INTEGER NOT NULL DEFAULT 0,
+    timestamp TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_traces_run ON traces(run_id);
+CREATE INDEX IF NOT EXISTS idx_traces_ts ON traces(timestamp);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT,
+    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+);";
+
 /// SQLite-backed trace store. Zero external dependencies.
 pub struct TraceStore {
     conn: Connection,
@@ -10,63 +37,15 @@ pub struct TraceStore {
 impl TraceStore {
     pub fn new(path: &Path) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(path)?;
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS traces (
-                id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                model TEXT NOT NULL,
-                tier TEXT NOT NULL,
-                input_tokens INTEGER NOT NULL,
-                output_tokens INTEGER NOT NULL,
-                cost_usd REAL NOT NULL,
-                latency_ms INTEGER NOT NULL,
-                tool_call TEXT,
-                cached INTEGER NOT NULL DEFAULT 0,
-                timestamp TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_traces_run ON traces(run_id);
-            CREATE INDEX IF NOT EXISTS idx_traces_ts ON traces(timestamp);
-
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                agent TEXT NOT NULL,
-                action TEXT NOT NULL,
-                detail TEXT,
-                timestamp TEXT NOT NULL DEFAULT (datetime('now'))
-            );",
-        )?;
+        conn.execute_batch(SCHEMA)?;
         Ok(Self { conn })
     }
 
     /// Open an in-memory store (for testing).
     pub fn in_memory() -> Result<Self, rusqlite::Error> {
         let conn = Connection::open_in_memory()?;
-        let store = Self { conn };
-        store.conn.execute_batch(
-            "CREATE TABLE traces (
-                id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                model TEXT NOT NULL,
-                tier TEXT NOT NULL,
-                input_tokens INTEGER NOT NULL,
-                output_tokens INTEGER NOT NULL,
-                cost_usd REAL NOT NULL,
-                latency_ms INTEGER NOT NULL,
-                tool_call TEXT,
-                cached INTEGER NOT NULL DEFAULT 0,
-                timestamp TEXT NOT NULL
-            );
-            CREATE TABLE audit_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT NOT NULL,
-                agent TEXT NOT NULL,
-                action TEXT NOT NULL,
-                detail TEXT,
-                timestamp TEXT NOT NULL DEFAULT (datetime('now'))
-            );",
-        )?;
-        Ok(store)
+        conn.execute_batch(SCHEMA)?;
+        Ok(Self { conn })
     }
 
     pub fn record_step(&self, run_id: &str, step: &Step) -> Result<(), rusqlite::Error> {

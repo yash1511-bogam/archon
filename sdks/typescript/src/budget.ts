@@ -17,7 +17,7 @@ export class Budget {
   private runSpent = 0;
   private daySpent = 0;
   private monthSpent = 0;
-  private currentDay: number;
+  private currentDay: string;
   private currentMonth: number;
   private readonly config: Required<BudgetConfig>;
 
@@ -29,8 +29,8 @@ export class Budget {
       warnAt: config.warnAt ?? 0.8,
     };
     const now = new Date();
-    this.currentDay = now.getUTCDate();
-    this.currentMonth = now.getUTCMonth();
+    this.currentDay = toDateKey(now);
+    this.currentMonth = now.getUTCMonth() + now.getUTCFullYear() * 12;
   }
 
   check(proposedCost: number): void {
@@ -63,14 +63,22 @@ export class Budget {
   }
 
   get remaining(): number | undefined {
-    if (this.config.maxPerRun === Infinity) return undefined;
-    return Math.max(0, this.config.maxPerRun - this.runSpent);
+    this.resetIfNewPeriod();
+    const limits: number[] = [];
+    if (this.config.maxPerRun !== Infinity)
+      limits.push(this.config.maxPerRun - this.runSpent);
+    if (this.config.maxPerDay !== Infinity)
+      limits.push(this.config.maxPerDay - this.daySpent);
+    if (this.config.maxPerMonth !== Infinity)
+      limits.push(this.config.maxPerMonth - this.monthSpent);
+    if (limits.length === 0) return undefined;
+    return Math.max(0, Math.min(...limits));
   }
 
   private resetIfNewPeriod(): void {
     const now = new Date();
-    const day = now.getUTCDate();
-    const month = now.getUTCMonth();
+    const day = toDateKey(now);
+    const month = now.getUTCMonth() + now.getUTCFullYear() * 12;
 
     if (day !== this.currentDay) {
       this.daySpent = 0;
@@ -81,4 +89,9 @@ export class Budget {
       this.currentMonth = month;
     }
   }
+}
+
+/** YYYY-MM-DD string — unique per calendar day, no month-boundary collisions. */
+function toDateKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }

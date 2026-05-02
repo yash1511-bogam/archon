@@ -99,10 +99,22 @@ class Budget(BaseModel):
 
     @property
     def remaining(self) -> float | None:
-        """USD remaining in the run budget, or None if no limit is set."""
-        if self.max_per_run is None:
+        """USD remaining before any budget limit is hit, or None if no limits set.
+
+        Returns the minimum remaining across all active limits (run, day, month)
+        so the router can proactively downgrade when any limit is close.
+        """
+        self._reset_if_new_period()
+        limits: list[float] = []
+        if self.max_per_run is not None:
+            limits.append(self.max_per_run - self._run_spent)
+        if self.max_per_day is not None:
+            limits.append(self.max_per_day - self._day_spent)
+        if self.max_per_month is not None:
+            limits.append(self.max_per_month - self._month_spent)
+        if not limits:
             return None
-        return max(0.0, self.max_per_run - self._run_spent)
+        return max(0.0, min(limits))
 
     def _reset_if_new_period(self) -> None:
         """Reset day/month counters if the calendar period has changed."""
