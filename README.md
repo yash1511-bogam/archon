@@ -287,10 +287,14 @@ If the pipeline crashes mid-run, re-running with the same `pipeline_id` skips co
 [![npm](https://img.shields.io/npm/v/@archon-ai/sdk)](https://www.npmjs.com/package/@archon-ai/sdk)
 
 ```bash
-# Python (uv recommended)
+# Python
+pip install archon-framework
+# or
 uv add archon-framework
 
-# TypeScript (pnpm recommended)
+# TypeScript
+npm install @archon-ai/sdk
+# or
 pnpm add @archon-ai/sdk
 ```
 
