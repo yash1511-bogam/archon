@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/tests-54%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-75%20passing-green" alt="Tests">
 </p>
 
 ---
@@ -528,7 +528,7 @@ make build
 
 ```bash
 make test
-# Runs: 4 Rust + 9 Python + 6 TypeScript = 19 tests
+# Runs: 4 Rust + 61 Python + 10 TypeScript = 75 tests
 ```
 
 ### Individual Components
@@ -575,12 +575,12 @@ make lint
 - [x] Built-in trace store with SQLite backend (WAL mode, retention, audit log)
 - [x] `archon traces` CLI command (list, show, stats, purge)
 
-### Phase 2 — Memory + Multi-Agent
-- [ ] Tiered memory (working/episodic/semantic/procedural)
-- [ ] Temporal decay + automatic consolidation
-- [ ] Multi-agent pipelines (sequential, parallel, hierarchical)
-- [ ] Durable execution with checkpointing
-- [ ] Full TypeScript Agent class with LLM integration
+### Phase 2 — Memory + Multi-Agent ✅
+- [x] Tiered memory (working/episodic/semantic/procedural) with temporal decay
+- [x] Automatic consolidation (expire old episodic, prune stale semantic)
+- [x] Multi-agent pipelines (sequential, parallel, hierarchical)
+- [x] Durable execution with SQLite-backed checkpointing + crash recovery
+- [x] Full TypeScript Agent class with LLM integration, routing, budget
 
 ### Phase 3 — Production Polish
 - [ ] Built-in web dashboard (`archon dashboard`)
@@ -604,7 +604,7 @@ make lint
 | Tool output sanitization | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Built-in trace store | ✗ (LangSmith $) | ✗ | ✗ | Partial | **✓** |
 | CLI for traces | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Tiered memory | ✗ | ✗ | ✗ | ✗ | **✓** (planned) |
+| Tiered memory | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Continuous eval | ✗ | ✗ | Partial | ✗ | **✓** (planned) |
 | Python + TypeScript | ✗ | ✗ | ✗ | ✗ | **✓** |
 | MCP support | ✓ | ✓ | ✓ | ✓ | **✓** (planned) |

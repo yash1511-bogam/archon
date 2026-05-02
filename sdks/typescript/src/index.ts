@@ -1,3 +1,5 @@
+export { Agent } from "./agent.js";
+export type { AgentConfig } from "./agent.js";
 export { Budget, BudgetExceeded } from "./budget.js";
 export { Router } from "./router.js";
 export type {

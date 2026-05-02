@@ -404,3 +404,252 @@ def test_step_model():
     step = Step(id="s1", model="gemini-flash", tier=Tier.SIMPLE)
     assert step.cost_usd == 0.0
     assert step.cached is False
+
+
+# ══════════════════════════════════════════════════════
+# Phase 2 Tests — Memory, Pipeline, Checkpointing
+# ══════════════════════════════════════════════════════
+
+from archon import (
+    Memory, MemoryEntry, MemoryType,
+    Pipeline, PipelineStep, Parallel, PipelineResult, CheckpointStore,
+)
+from archon.pipeline import StepStatus
+import asyncio
+
+
+# ── Memory: Basic CRUD ─────────────────────────────────
+
+def test_memory_remember_and_recall():
+    mem = Memory()
+    mem.remember("python", "Python is a programming language", MemoryType.SEMANTIC)
+    results = mem.recall("python")
+    assert len(results) >= 1
+    assert any("Python" in r.value for r in results)
+
+
+def test_memory_forget():
+    mem = Memory()
+    mem.remember("temp", "temporary data", MemoryType.EPISODIC)
+    deleted = mem.forget("temp", MemoryType.EPISODIC)
+    assert deleted == 1
+    results = mem.recall("temp")
+    assert not any(r.key == "temp" for r in results)
+
+
+def test_memory_forget_all_types():
+    mem = Memory()
+    mem.remember("key1", "value", MemoryType.SEMANTIC)
+    mem.remember("key1", "value", MemoryType.EPISODIC)
+    deleted = mem.forget("key1")
+    assert deleted == 2
+
+
+# ── Memory: Tiers ──────────────────────────────────────
+
+def test_memory_working_memory():
+    mem = Memory()
+    mem.remember("current_task", "Researching AI frameworks", MemoryType.WORKING)
+    mem.remember("user_pref", "Prefers concise answers", MemoryType.WORKING)
+    working = mem.get_working_memory()
+    assert len(working) == 2
+
+
+def test_memory_procedural():
+    mem = Memory()
+    mem.remember("search_pattern", "search → read → summarize", MemoryType.PROCEDURAL)
+    procedures = mem.get_procedures()
+    assert len(procedures) == 1
+    assert "search" in procedures[0].value
+
+
+def test_memory_recall_filters_by_type():
+    mem = Memory()
+    mem.remember("fact", "Python is great", MemoryType.SEMANTIC)
+    mem.remember("event", "User asked about Python", MemoryType.EPISODIC)
+
+    semantic_only = mem.recall("Python", memory_types=[MemoryType.SEMANTIC])
+    assert all(r.memory_type == MemoryType.SEMANTIC for r in semantic_only)
+
+
+# ── Memory: Temporal Decay ─────────────────────────────
+
+def test_memory_temporal_decay():
+    mem = Memory(decay_half_life_hours=0.0000001)  # ~0.36ms half-life
+    mem.remember("old_event", "Something happened", MemoryType.EPISODIC)
+    import time; time.sleep(0.05)  # 50ms — many half-lives
+    results = mem.recall("old_event", memory_types=[MemoryType.EPISODIC])
+    # Score should be very low due to rapid decay
+    if results:
+        assert results[0].score < 0.5
+
+
+def test_memory_semantic_no_decay():
+    """Semantic memories should NOT decay — only episodic ones do."""
+    mem = Memory(decay_half_life_hours=0.001)
+    mem.remember("fact", "The sky is blue", MemoryType.SEMANTIC)
+    import time; time.sleep(0.01)
+    results = mem.recall("sky blue", memory_types=[MemoryType.SEMANTIC])
+    assert len(results) >= 1
+    # Semantic memories don't get temporal decay applied
+    assert results[0].score > 0.1
+
+
+# ── Memory: Consolidation ─────────────────────────────
+
+def test_memory_consolidation():
+    mem = Memory(consolidation_threshold=5)
+    # Write enough entries to trigger auto-consolidation
+    for i in range(6):
+        mem.remember(f"item_{i}", f"value {i}", MemoryType.EPISODIC)
+    # Should not crash — consolidation runs silently
+    stats = mem.stats()
+    assert stats["total"] >= 1
+
+
+def test_memory_manual_consolidation():
+    mem = Memory()
+    mem.remember("old", "old data", MemoryType.EPISODIC)
+    result = mem.consolidate()
+    # Should return a ConsolidationResult without errors
+    assert result.expired_removed >= 0
+    assert result.stale_pruned >= 0
+
+
+# ── Memory: Stats ──────────────────────────────────────
+
+def test_memory_stats():
+    mem = Memory()
+    mem.remember("a", "val", MemoryType.SEMANTIC)
+    mem.remember("b", "val", MemoryType.EPISODIC)
+    mem.remember("c", "val", MemoryType.PROCEDURAL)
+    stats = mem.stats()
+    assert stats["total"] == 3
+    assert "semantic" in stats["by_type"]
+
+
+# ── Pipeline: Sequential ───────────────────────────────
+
+class MockAgent:
+    """A mock agent for testing pipelines without LLM calls."""
+
+    def __init__(self, name: str, response: str = "mock output") -> None:
+        self.name = name
+        self._response = response
+
+    async def run(self, prompt: str) -> AgentResult:
+        return AgentResult(
+            run_id=f"mock-{self.name}",
+            output=f"{self._response}: {prompt[:50]}",
+            total_cost_usd=0.01,
+        )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_sequential():
+    researcher = MockAgent("researcher", "research findings")
+    writer = MockAgent("writer", "written article")
+
+    pipeline = Pipeline(steps=[
+        PipelineStep(agent=researcher),
+        PipelineStep(
+            agent=writer,
+            input_fn=lambda ctx: f"Write about: {ctx.get('researcher', '')}",
+        ),
+    ])
+
+    result = await pipeline.run("AI frameworks")
+    assert result.status == StepStatus.COMPLETED
+    assert "researcher" in result.outputs
+    assert "writer" in result.outputs
+    assert result.total_cost_usd == pytest.approx(0.02)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_parallel():
+    agent_a = MockAgent("analyst_a", "analysis A")
+    agent_b = MockAgent("analyst_b", "analysis B")
+    synthesizer = MockAgent("synthesizer", "synthesis")
+
+    pipeline = Pipeline(steps=[
+        Parallel(steps=[
+            PipelineStep(agent=agent_a),
+            PipelineStep(agent=agent_b),
+        ]),
+        PipelineStep(
+            agent=synthesizer,
+            input_fn=lambda ctx: f"Combine: {ctx.get('analyst_a', '')} + {ctx.get('analyst_b', '')}",
+        ),
+    ])
+
+    result = await pipeline.run("Market analysis")
+    assert result.status == StepStatus.COMPLETED
+    assert len(result.outputs) == 3
+    assert result.total_cost_usd == pytest.approx(0.03)
+
+
+# ── Pipeline: Checkpointing ───────────────────────────
+
+@pytest.mark.asyncio
+async def test_pipeline_checkpointing():
+    store = CheckpointStore()
+    agent_a = MockAgent("step_a", "output A")
+    agent_b = MockAgent("step_b", "output B")
+
+    pipeline = Pipeline(
+        steps=[PipelineStep(agent=agent_a), PipelineStep(agent=agent_b)],
+        checkpoint_store=store,
+        pipeline_id="test-pipeline-1",
+    )
+
+    result = await pipeline.run("test task")
+    assert result.status == StepStatus.COMPLETED
+    assert store.is_completed("test-pipeline-1", "step_a")
+    assert store.is_completed("test-pipeline-1", "step_b")
+
+
+@pytest.mark.asyncio
+async def test_pipeline_crash_recovery():
+    """Simulate crash recovery: pre-populate checkpoint, verify step is skipped."""
+    store = CheckpointStore()
+
+    # Simulate step_a already completed from a previous run
+    store.save("resume-pipeline", "step_a", StepStatus.COMPLETED, output="previous output A")
+
+    agent_a = MockAgent("step_a", "should NOT run")
+    agent_b = MockAgent("step_b", "output B")
+
+    pipeline = Pipeline(
+        steps=[PipelineStep(agent=agent_a), PipelineStep(agent=agent_b)],
+        checkpoint_store=store,
+        pipeline_id="resume-pipeline",
+    )
+
+    result = await pipeline.run("test task")
+    assert result.status == StepStatus.COMPLETED
+    # step_a should have the checkpointed output, not the mock's output
+    assert result.outputs["step_a"] == "previous output A"
+    assert "step_b" in result.outputs
+
+
+@pytest.mark.asyncio
+async def test_pipeline_result_aggregation():
+    agents = [MockAgent(f"agent_{i}", f"output {i}") for i in range(3)]
+    pipeline = Pipeline(steps=[PipelineStep(agent=a) for a in agents])
+
+    result = await pipeline.run("test")
+    assert result.total_cost_usd == pytest.approx(0.03)
+    assert result.total_steps == 0  # MockAgent returns 0 steps (no Step objects)
+    assert len(result.agent_results) == 3
+
+
+def test_checkpoint_store_operations():
+    store = CheckpointStore()
+    store.save("p1", "s1", StepStatus.COMPLETED, output="done")
+    store.save("p1", "s2", StepStatus.RUNNING)
+
+    completed = store.get_completed("p1")
+    assert "s1" in completed
+    assert "s2" not in completed
+    assert store.is_completed("p1", "s1")
+    assert not store.is_completed("p1", "s2")
