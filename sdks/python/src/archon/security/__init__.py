@@ -1,21 +1,37 @@
-"""Security layer — subprocess sandbox and policy engine.
+"""Security layer — subprocess sandbox and declarative policy engine.
 
 Default-deny posture: tools are blocked unless explicitly allowed.
-Tool execution runs in isolated subprocess with timeout and resource limits.
+Tool execution can run in an isolated subprocess with timeout.
+
+Usage::
+
+    policy = SecurityPolicy(rules=[
+        PolicyRule(tool="search_web", action=PolicyAction.ALLOW),
+        PolicyRule(tool="send_email", action=PolicyAction.REQUIRE_APPROVAL),
+    ])
+    # Everything else is denied by default.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
-import json
 import textwrap
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+# ── Default limits ─────────────────────────────────────
+
+DEFAULT_SANDBOX_TIMEOUT_SECONDS = 30
+DEFAULT_MAX_OUTPUT_SIZE = 50_000
+DEFAULT_MAX_ARGS_LENGTH = 10_000
+
 
 class PolicyAction(str, Enum):
+    """What to do when an agent tries to call a tool."""
+
     ALLOW = "allow"
     DENY = "deny"
     REQUIRE_APPROVAL = "require_approval"
@@ -23,52 +39,69 @@ class PolicyAction(str, Enum):
 
 @dataclass
 class PolicyRule:
-    tool: str  # tool name or "*" for wildcard
+    """A single rule in the security policy.
+
+    Attributes:
+        tool: Tool name to match, or ``"*"`` for wildcard.
+        action: What to do when this tool is called.
+        max_args_length: Maximum serialized argument size (bytes). Prevents payload stuffing.
+    """
+
+    tool: str
     action: PolicyAction = PolicyAction.DENY
-    max_args_length: int = 10_000
+    max_args_length: int = DEFAULT_MAX_ARGS_LENGTH
 
 
 @dataclass
 class SecurityPolicy:
     """Declarative policy engine for tool execution.
 
-    Default-deny: tools not in the allow list are blocked.
+    Evaluates tool calls against a list of rules. If no rule matches,
+    the default action applies (deny by default).
     """
 
     default: PolicyAction = PolicyAction.DENY
     rules: list[PolicyRule] = field(default_factory=list)
 
     def evaluate(self, tool_name: str, args: dict[str, Any]) -> PolicyAction:
-        """Evaluate whether a tool call is allowed."""
-        # Check specific rules first
+        """Decide whether a tool call should proceed.
+
+        Checks rules in order. First match wins. Falls back to ``self.default``.
+        """
         for rule in self.rules:
             if rule.tool == tool_name or rule.tool == "*":
-                # Check arg size limits
-                args_str = json.dumps(args)
-                if len(args_str) > rule.max_args_length:
+                serialized_args = json.dumps(args)
+                if len(serialized_args) > rule.max_args_length:
                     return PolicyAction.DENY
                 return rule.action
         return self.default
 
     @classmethod
     def allow_all(cls) -> SecurityPolicy:
+        """Create a permissive policy that allows all tool calls."""
         return cls(default=PolicyAction.ALLOW)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SecurityPolicy:
+        """Create a policy from a dictionary (e.g., parsed YAML config)."""
         default = PolicyAction(data.get("default", "deny"))
-        rules = []
-        for r in data.get("rules", []):
-            rules.append(PolicyRule(
+        rules = [
+            PolicyRule(
                 tool=r["tool"],
                 action=PolicyAction(r.get("action", "allow")),
-                max_args_length=r.get("max_args_length", 10_000),
-            ))
+                max_args_length=r.get("max_args_length", DEFAULT_MAX_ARGS_LENGTH),
+            )
+            for r in data.get("rules", [])
+        ]
         return cls(default=default, rules=rules)
 
 
+# ── Subprocess sandbox ─────────────────────────────────
+
 @dataclass
 class SandboxResult:
+    """Result of executing a tool in a sandboxed subprocess."""
+
     output: str
     error: str | None = None
     timed_out: bool = False
@@ -76,15 +109,24 @@ class SandboxResult:
 
 
 class Sandbox:
-    """Execute tool functions in an isolated subprocess with timeout."""
+    """Execute tool functions in an isolated subprocess with timeout.
 
-    def __init__(self, *, timeout: int = 30, max_output: int = 50_000) -> None:
-        self.timeout = timeout
-        self.max_output = max_output
+    The tool runs in a separate Python process with no shared memory.
+    This prevents a compromised tool from accessing the agent's state.
+    """
+
+    def __init__(
+        self,
+        *,
+        timeout_seconds: int = DEFAULT_SANDBOX_TIMEOUT_SECONDS,
+        max_output_size: int = DEFAULT_MAX_OUTPUT_SIZE,
+    ) -> None:
+        self.timeout_seconds = timeout_seconds
+        self.max_output_size = max_output_size
 
     def execute(self, fn_source: str, fn_name: str, args: dict[str, Any]) -> SandboxResult:
-        """Run a function in a subprocess. Returns SandboxResult."""
-        wrapper = textwrap.dedent(f"""\
+        """Run a function in a subprocess. Returns structured result."""
+        wrapper_code = textwrap.dedent(f"""\
             import json, sys
             {fn_source}
             args = json.loads(sys.stdin.read())
@@ -93,43 +135,55 @@ class Sandbox:
         """)
 
         try:
-            proc = subprocess.run(
-                [sys.executable, "-c", wrapper],
+            process = subprocess.run(
+                [sys.executable, "-c", wrapper_code],
                 input=json.dumps(args),
                 capture_output=True,
                 text=True,
-                timeout=self.timeout,
+                timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired:
-            return SandboxResult(output="", error="Tool execution timed out", timed_out=True, exit_code=-1)
-
-        if proc.returncode != 0:
             return SandboxResult(
-                output="", error=proc.stderr[:self.max_output] or "Tool execution failed",
-                exit_code=proc.returncode,
+                output="", error="Tool execution timed out",
+                timed_out=True, exit_code=-1,
             )
 
-        output = proc.stdout[:self.max_output]
-        try:
-            parsed = json.loads(output)
-            return SandboxResult(output=parsed.get("result", output))
-        except json.JSONDecodeError:
-            return SandboxResult(output=output)
+        if process.returncode != 0:
+            error_message = process.stderr[: self.max_output_size] or "Tool execution failed"
+            return SandboxResult(output="", error=error_message, exit_code=process.returncode)
 
+        raw_output = process.stdout[: self.max_output_size]
+        try:
+            parsed = json.loads(raw_output)
+            return SandboxResult(output=parsed.get("result", raw_output))
+        except json.JSONDecodeError:
+            return SandboxResult(output=raw_output)
+
+
+# ── Top-level configuration ───────────────────────────
 
 @dataclass
 class SecurityConfig:
-    """Top-level security configuration for an agent."""
+    """Top-level security configuration for an agent.
+
+    Attributes:
+        sandbox: If True, tool calls execute in isolated subprocesses.
+        policy: The policy engine that decides allow/deny/approval per tool.
+        sandbox_timeout: Seconds before a sandboxed tool call is killed.
+        max_output_size: Maximum characters returned from a tool call.
+    """
 
     sandbox: bool = False
     policy: SecurityPolicy = field(default_factory=lambda: SecurityPolicy.allow_all())
-    sandbox_timeout: int = 30
-    max_output_size: int = 50_000
+    sandbox_timeout: int = DEFAULT_SANDBOX_TIMEOUT_SECONDS
+    max_output_size: int = DEFAULT_MAX_OUTPUT_SIZE
 
     @classmethod
     def default_deny(cls) -> SecurityConfig:
+        """Secure defaults: sandbox enabled, all tools denied unless allowed."""
         return cls(sandbox=True, policy=SecurityPolicy())
 
     @classmethod
     def permissive(cls) -> SecurityConfig:
+        """Development defaults: no sandbox, all tools allowed."""
         return cls(sandbox=False, policy=SecurityPolicy.allow_all())

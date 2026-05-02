@@ -1,4 +1,8 @@
-"""Core types for Archon."""
+"""Core types shared across all Archon modules.
+
+These are the data contracts that flow through the entire system:
+Agent → Router → Budget → TraceStore → CLI.
+"""
 
 from __future__ import annotations
 
@@ -9,13 +13,23 @@ from pydantic import BaseModel, Field
 
 
 class Tier(str, Enum):
+    """Complexity tier for model routing.
+
+    The router classifies every input into one of three tiers,
+    then selects the cheapest model capable of handling that tier.
+    """
+
     SIMPLE = "simple"
     STANDARD = "standard"
     COMPLEX = "complex"
 
 
 class Step(BaseModel):
-    """A single step in an agent execution trace."""
+    """A single step in an agent execution trace.
+
+    Every LLM call produces one Step. Tool calls, cache hits,
+    and policy blocks are all recorded as steps for full auditability.
+    """
 
     id: str
     model: str
@@ -30,7 +44,11 @@ class Step(BaseModel):
 
 
 class AgentResult(BaseModel):
-    """Result of a complete agent run."""
+    """Result of a complete agent run.
+
+    Always includes cost, step count, and a trace URL — observability
+    is not optional in Archon.
+    """
 
     run_id: str
     output: str
@@ -45,12 +63,15 @@ class AgentResult(BaseModel):
 
     @property
     def cost(self) -> float:
+        """Total cost in USD for this run."""
         return self.total_cost_usd
 
     @property
     def step_count(self) -> int:
+        """Number of steps (LLM calls + tool calls) in this run."""
         return len(self.steps)
 
     @property
     def trace_url(self) -> str:
+        """URL to view the full execution trace in the dashboard."""
         return f"http://localhost:8080/traces/{self.run_id}"
