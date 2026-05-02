@@ -58,21 +58,31 @@ impl BudgetTracker {
             }
         }
         if let Some(limit) = self.config.max_per_day {
-            if self.day_spent + proposed_cost > limit {
+            let after = self.day_spent + proposed_cost;
+            if after > limit {
                 return Err(BudgetError::Exceeded {
                     spent: self.day_spent,
                     limit,
                     scope: "day".into(),
                 });
             }
+            let pct = after / limit;
+            if pct >= self.config.warn_at_fraction {
+                tracing::warn!(spent = self.day_spent, limit, pct, "budget warning");
+            }
         }
         if let Some(limit) = self.config.max_per_month {
-            if self.month_spent + proposed_cost > limit {
+            let after = self.month_spent + proposed_cost;
+            if after > limit {
                 return Err(BudgetError::Exceeded {
                     spent: self.month_spent,
                     limit,
                     scope: "month".into(),
                 });
+            }
+            let pct = after / limit;
+            if pct >= self.config.warn_at_fraction {
+                tracing::warn!(spent = self.month_spent, limit, pct, "budget warning");
             }
         }
         Ok(())

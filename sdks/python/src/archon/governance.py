@@ -121,6 +121,7 @@ class EventStore:
         limit: int = 100,
     ) -> list[Event]:
         """Query events with optional filters."""
+        limit = max(1, limit)
         query = "SELECT id, event_type, agent, run_id, user_id, data, timestamp FROM events WHERE 1=1"
         params: list[Any] = []
 
@@ -357,12 +358,19 @@ class GDPRManager:
             memory_count = cursor.rowcount
             self._memory_conn.commit()
 
-        # Log the erasure (this event persists for audit)
+        # Log the erasure (this event persists for audit).
+        # ``user_id`` is intentionally left NULL so subsequent
+        # ``delete_by_user`` calls for the same user do not purge
+        # their own audit trail. The real user_id is kept in ``data``.
         self.event_store.append(Event(
             event_type=EventType.USER_DATA_ERASED,
             agent="gdpr_manager", run_id="gdpr",
-            user_id=user_id,
-            data={"events_erased": events_count, "memory_erased": memory_count},
+            user_id=None,
+            data={
+                "erased_user_id": user_id,
+                "events_erased": events_count,
+                "memory_erased": memory_count,
+            },
         ))
 
         return GDPRErasureResult(

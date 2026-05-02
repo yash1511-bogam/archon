@@ -221,6 +221,23 @@ class Pipeline:
         self.checkpoint_store = checkpoint_store
         self.pipeline_id = pipeline_id or str(uuid.uuid4())
 
+        # Validate unique step names across the pipeline, including
+        # parallel group members. Duplicate names would collide in
+        # result.outputs and checkpoint keys.
+        seen: set[str] = set()
+        for step_or_group in steps:
+            if isinstance(step_or_group, Parallel):
+                names = [s.name for s in step_or_group.steps]
+            else:
+                names = [step_or_group.name]
+            for name in names:
+                if name in seen:
+                    raise ValueError(
+                        f"Duplicate pipeline step name: {name!r}. "
+                        "Each step (including those inside Parallel groups) must have a unique name."
+                    )
+                seen.add(name)
+
     async def run(self, task: str) -> PipelineResult:
         """Execute the pipeline and return aggregated results.
 
@@ -289,11 +306,36 @@ class Pipeline:
     async def _run_parallel(
         self, group: Parallel, task: str, result: PipelineResult,
     ) -> None:
-        """Execute a group of steps concurrently."""
+        """Execute a group of steps concurrently.
+
+        Uses ``return_exceptions=True`` so that a single failing step
+        does not cancel its siblings. Failed steps are recorded with
+        status FAILED and an error message; successful siblings still
+        commit their outputs normally.
+        """
         # Filter out already-completed steps
         pending = [s for s in group.steps if s.name not in result.outputs]
         if not pending:
             return
 
         tasks = [self._run_step(step, task, result) for step in pending]
-        await asyncio.gather(*tasks)
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+
+        failed_steps: list[tuple[str, BaseException]] = []
+        for step, outcome in zip(pending, outcomes):
+            if isinstance(outcome, BaseException):
+                failed_steps.append((step.name, outcome))
+                # Ensure the checkpoint and result reflect the failure even
+                # though ``_run_step`` re-raised before it could record it.
+                if self.checkpoint_store:
+                    self.checkpoint_store.save(
+                        self.pipeline_id, step.name, StepStatus.FAILED,
+                        output=str(outcome),
+                    )
+
+        if failed_steps:
+            # Mark the overall pipeline as failed but keep the successful
+            # siblings' outputs in ``result.outputs`` for partial recovery.
+            result.status = StepStatus.FAILED
+            names = ", ".join(f"{n}: {e}" for n, e in failed_steps)
+            raise RuntimeError(f"Parallel group '{group.name}' had failures — {names}")

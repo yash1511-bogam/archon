@@ -161,7 +161,7 @@ export class Agent {
           if (tool) {
             try {
               const args = JSON.parse(tc.function.arguments);
-              const rawResult = tool.fn(...Object.values(args));
+              const rawResult = tool.fn(args);
               toolOutput = String(rawResult);
             } catch (err) {
               toolOutput = `[Tool error: ${err}]`;
@@ -302,11 +302,12 @@ function estimateCost(
     "gpt-4.1": [2.00, 8.00],
     "claude-haiku": [0.80, 4.00],
     "claude-sonnet": [3.00, 15.0],
-    "claude-opus": [15.0, 75.0],
+    "claude-opus": [5.00, 25.0],
     "gemini-flash": [0.15, 0.60],
     "gemini-pro": [1.25, 5.00],
     "o4-mini": [1.10, 4.40],
-    "deepseek": [0.14, 0.28],
+    "deepseek-r1": [0.55, 2.19],
+    "deepseek": [0.27, 1.10],
   };
 
   // Find the best matching pricing entry

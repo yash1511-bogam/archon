@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -61,6 +62,9 @@ class AgentResult(BaseModel):
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: datetime | None = None
 
+    # Base URL for the dashboard; override to point trace_url at a custom host.
+    _dashboard_base: ClassVar[str] = "http://localhost:8080"
+
     @property
     def cost(self) -> float:
         """Total cost in USD for this run."""
@@ -74,4 +78,4 @@ class AgentResult(BaseModel):
     @property
     def trace_url(self) -> str:
         """URL to view the full execution trace in the dashboard."""
-        return f"http://localhost:8080/traces/{self.run_id}"
+        return f"{self._dashboard_base}/traces/{self.run_id}"

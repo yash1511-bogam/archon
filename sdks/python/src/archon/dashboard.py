@@ -263,4 +263,4 @@ def start_dashboard(*, port: int = 8080, db_path: str | None = None) -> None:
 
     app = create_app(db_path)
     print(f"⚡ Archon Dashboard running at http://localhost:{port}")
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

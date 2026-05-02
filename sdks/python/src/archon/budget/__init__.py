@@ -92,6 +92,16 @@ class Budget(BaseModel):
         self._day_spent += cost
         self._month_spent += cost
 
+    def reset_run(self) -> None:
+        """Reset per-run spending to zero.
+
+        Called at the start of each ``Agent.run()`` so that a single
+        ``Budget`` instance reused across multiple runs enforces
+        ``max_per_run`` independently each time. Day/month counters
+        are preserved.
+        """
+        self._run_spent = 0.0
+
     @property
     def spent(self) -> float:
         """Total USD spent in the current run."""

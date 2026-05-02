@@ -91,11 +91,25 @@ class ShadowRunner:
         Returns:
             ShadowComparison with scores, cost delta, and promotion recommendation.
         """
-        # Run both agents concurrently
+        # Run both agents concurrently. Use return_exceptions=True so a
+        # candidate crash never takes down the primary result.
         primary_result, candidate_result = await asyncio.gather(
             self.primary.run(prompt),
             self.candidate.run(prompt),
+            return_exceptions=True,
         )
+
+        # A primary failure must still propagate — the user's result depends on it.
+        if isinstance(primary_result, BaseException):
+            raise primary_result
+
+        # A candidate failure is survivable: we record a failed AgentResult
+        # instead of crashing the shadow comparison.
+        if isinstance(candidate_result, BaseException):
+            candidate_result = AgentResult(
+                run_id="shadow-failed",
+                output=f"[Shadow candidate error: {candidate_result}]",
+            )
 
         # Evaluate both
         primary_inline = self.eval_engine.run_inline(primary_result)

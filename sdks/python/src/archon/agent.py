@@ -42,6 +42,11 @@ from archon.types import AgentResult, Step, Tier
 # Used before the actual LLM call to avoid overspending.
 ESTIMATED_COST_PER_CALL = 0.01
 
+# Sentinel returned by ``Agent._call_llm`` when the LLM call raises.
+# The caller detects this and breaks out of the agent loop with a
+# partial result already populated on ``AgentResult``.
+LLM_CALL_FAILED: tuple[None, None] = (None, None)
+
 
 class Agent:
     """An AI agent with built-in cost control, routing, security, and tracing.
@@ -102,6 +107,10 @@ class Agent:
         run_id = str(uuid.uuid4())
         result = AgentResult(run_id=run_id, output="", started_at=datetime.now(timezone.utc))
 
+        # Reset per-run budget before anything else so a shared ``Budget``
+        # instance enforces ``max_per_run`` independently on each call.
+        self.budget.reset_run()
+
         # Register the run in the trace store immediately (correct timestamp)
         if self.trace_store:
             self.trace_store.start_run(run_id, self.name, "")
@@ -132,12 +141,16 @@ class Agent:
 
             # Gate 3: Call LLM
             step, response_message = await self._call_llm(
-                routing, messages, tool_schemas, run_id, step_number,
+                routing, messages, tool_schemas, run_id, step_number, result,
             )
+
+            # LLM call failed — ``result.output`` already contains the error message.
+            if step is None:
+                break
 
             # Handle tool calls or final response
             if response_message.tool_calls:
-                messages.append(response_message.model_dump())
+                messages.append(_assistant_message_dict(response_message))
                 self._handle_tool_calls(
                     response_message.tool_calls, tool_map, messages, step, run_id,
                 )
@@ -212,14 +225,25 @@ class Agent:
         tool_schemas: list[dict[str, Any]],
         run_id: str,
         step_number: int,
-    ) -> tuple[Step, Any]:
-        """Call the LLM and return a (Step, message) tuple."""
+        result: AgentResult,
+    ) -> tuple[Step, Any] | tuple[None, None]:
+        """Call the LLM and return a (Step, message) tuple.
+
+        On failure, populates ``result.output`` with a partial-result
+        error message, audits the failure, and returns ``LLM_CALL_FAILED``
+        so the caller can break out of the agent loop without crashing.
+        """
         start_time = time.monotonic()
-        response = await litellm.acompletion(
-            model=routing.model,
-            messages=messages,
-            tools=tool_schemas if tool_schemas else None,
-        )
+        try:
+            response = await litellm.acompletion(
+                model=routing.model,
+                messages=messages,
+                tools=tool_schemas if tool_schemas else None,
+            )
+        except Exception as exc:
+            result.output = f"[LLM error after {step_number} steps: {exc}]"
+            self._audit(run_id, "llm_error", f"{routing.model}: {exc}")
+            return LLM_CALL_FAILED
         latency_ms = int((time.monotonic() - start_time) * 1000)
 
         cost = self._extract_cost(response)
@@ -249,10 +273,23 @@ class Agent:
         run_id: str,
     ) -> None:
         """Execute each tool call with policy check and output sanitization."""
+        tool_names: list[str] = []
         for tool_call in tool_calls:
             fn_name = tool_call.function.name
-            step.tool_call = fn_name
-            args = json.loads(tool_call.function.arguments)
+            tool_names.append(fn_name)
+
+            # Parse arguments defensively — an LLM can return malformed JSON.
+            try:
+                args = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError as exc:
+                tool_output = f"[Invalid tool arguments: {exc}]"
+                self._audit(run_id, "tool_bad_args", f"{fn_name}: {exc}")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": tool_output,
+                })
+                continue
 
             # Policy check
             tool_output = self._execute_with_policy(fn_name, args, tool_map, run_id)
@@ -265,6 +302,9 @@ class Agent:
                 "tool_call_id": tool_call.id,
                 "content": tool_output,
             })
+
+        # Record every tool invoked on this step, not just the last one.
+        step.tool_call = ",".join(tool_names) if tool_names else None
 
     def _execute_with_policy(
         self,
@@ -369,13 +409,48 @@ class Agent:
 
     @staticmethod
     def _extract_cost(response: Any) -> float:
-        """Extract cost from a LiteLLM response, with fallback."""
-        cost = 0.0
+        """Extract cost from a LiteLLM response, with fallback.
+
+        Uses ``None`` as the sentinel for "missing" so that a genuine
+        ``$0.00`` response_cost (e.g. cached or free-tier calls) is
+        respected instead of being replaced by the fallback estimate.
+        """
+        cost: float | None = None
         if hasattr(response, "_hidden_params"):
-            cost = response._hidden_params.get("response_cost", 0.0)
-        if cost == 0.0:
+            cost = response._hidden_params.get("response_cost")
+        if cost is None:
             try:
                 cost = litellm.completion_cost(completion_response=response)
             except Exception:
                 cost = 0.0
         return cost
+
+
+def _assistant_message_dict(response_message: Any) -> dict[str, Any]:
+    """Extract only the fields the OpenAI chat protocol expects for an assistant turn.
+
+    ``response_message.model_dump()`` from LiteLLM/OpenAI SDKs may include
+    extra provider-specific fields (e.g. ``function_call``, ``refusal``,
+    ``annotations``) that some downstream models reject. This helper keeps
+    only ``role``, ``content``, and ``tool_calls``.
+    """
+    dumped: dict[str, Any]
+    if hasattr(response_message, "model_dump"):
+        dumped = response_message.model_dump()
+    elif isinstance(response_message, dict):
+        dumped = dict(response_message)
+    else:
+        dumped = {
+            "role": getattr(response_message, "role", "assistant"),
+            "content": getattr(response_message, "content", None),
+            "tool_calls": getattr(response_message, "tool_calls", None),
+        }
+
+    message: dict[str, Any] = {
+        "role": dumped.get("role", "assistant"),
+        "content": dumped.get("content"),
+    }
+    tool_calls = dumped.get("tool_calls")
+    if tool_calls:
+        message["tool_calls"] = tool_calls
+    return message

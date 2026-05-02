@@ -15,12 +15,15 @@ Usage::
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── Default limits ─────────────────────────────────────
 
@@ -62,6 +65,29 @@ class SecurityPolicy:
 
     default: PolicyAction = PolicyAction.DENY
     rules: list[PolicyRule] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self._warn_if_wildcard_shadows_rules()
+
+    def _warn_if_wildcard_shadows_rules(self) -> None:
+        """Emit a warning if a ``"*"`` wildcard rule precedes more specific rules.
+
+        ``evaluate`` returns on first match, so a wildcard that appears
+        before specific rules will always win and silently disable the
+        more specific rules below it. That is almost never intended.
+        """
+        for i, rule in enumerate(self.rules):
+            if rule.tool == "*":
+                shadowed = [r.tool for r in self.rules[i + 1:] if r.tool != "*"]
+                if shadowed:
+                    logger.warning(
+                        "SecurityPolicy: wildcard rule at index %d shadows %d "
+                        "subsequent specific rule(s): %s. Move the wildcard to "
+                        "the end of the rules list so specific rules can match first.",
+                        i, len(shadowed), shadowed,
+                    )
+                # Only the first wildcard needs to be reported.
+                return
 
     def evaluate(self, tool_name: str, args: dict[str, Any]) -> PolicyAction:
         """Decide whether a tool call should proceed.

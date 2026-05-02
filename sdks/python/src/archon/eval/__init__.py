@@ -203,25 +203,31 @@ class RegressionWindow:
     Attributes:
         scores: Recent scores (0.0–1.0) for a specific metric.
         costs: Recent costs per run.
-        failure_count: Number of failures in the window.
+        failures: Per-entry failure flags, aligned with ``scores``/``costs``.
         window_size: Maximum entries to keep.
     """
 
     scores: list[float] = field(default_factory=list)
     costs: list[float] = field(default_factory=list)
-    failure_count: int = 0
+    failures: list[bool] = field(default_factory=list)
     window_size: int = 100
 
     def add(self, score: float, cost: float, failed: bool) -> None:
-        """Add a data point to the window."""
+        """Add a data point to the window, trimming all aligned lists together."""
         self.scores.append(score)
         self.costs.append(cost)
-        if failed:
-            self.failure_count += 1
-        # Trim to window size
+        self.failures.append(failed)
+        # Trim to window size. Keep scores, costs, and failures aligned so
+        # ``failure_count`` reflects only the entries currently in the window.
         if len(self.scores) > self.window_size:
             self.scores = self.scores[-self.window_size:]
             self.costs = self.costs[-self.window_size:]
+            self.failures = self.failures[-self.window_size:]
+
+    @property
+    def failure_count(self) -> int:
+        """Number of failures currently within the window."""
+        return sum(1 for f in self.failures if f)
 
 
 class RegressionDetector:

@@ -160,6 +160,7 @@ class SemanticCache:
     def _evict_expired(self) -> None:
         cutoff = time.time() - self.ttl_seconds
         self._conn.execute("DELETE FROM cache WHERE created_at < ?", (cutoff,))
+        self._conn.commit()
 
     def _enforce_max_entries(self) -> None:
         count = self._conn.execute("SELECT COUNT(*) FROM cache").fetchone()[0]

@@ -224,8 +224,13 @@ class Memory:
         scored_entries.sort(key=lambda e: e.score, reverse=True)
         top_entries = scored_entries[:limit]
 
-        # Update access timestamps for retrieved entries
-        self._mark_accessed([e.key for e in top_entries])
+        # Update access timestamps for retrieved entries, scoped to the
+        # exact (key, type) pairs returned so we don't bump unrelated
+        # entries that happen to share a key across memory tiers.
+        self._mark_accessed(
+            [e.key for e in top_entries],
+            types=[e.memory_type for e in top_entries],
+        )
 
         return top_entries
 
@@ -315,17 +320,37 @@ class Memory:
             return 1.0
         return math.pow(0.5, age_hours / self.decay_half_life_hours)
 
-    def _mark_accessed(self, keys: list[str]) -> None:
-        """Update access timestamp and count for retrieved entries."""
+    def _mark_accessed(
+        self,
+        keys: list[str],
+        types: list[MemoryType] | None = None,
+    ) -> None:
+        """Update access timestamp and count for retrieved entries.
+
+        If ``types`` is provided it must align 1:1 with ``keys`` and the
+        UPDATE is narrowed to the matching (key, type) pairs so we only
+        mark the tiers actually recalled.
+        """
         if not keys:
             return
         now = time.time()
-        placeholders = ",".join("?" for _ in keys)
-        self._conn.execute(
-            f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"
-            f" WHERE key IN ({placeholders})",
-            [now, *keys],
-        )
+        key_placeholders = ",".join("?" for _ in keys)
+        if types is not None:
+            type_values = [t.value for t in types]
+            unique_types = list(dict.fromkeys(type_values))  # preserve order, dedupe
+            type_placeholders = ",".join("?" for _ in unique_types)
+            self._conn.execute(
+                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"
+                f" WHERE key IN ({key_placeholders})"
+                f" AND type IN ({type_placeholders})",
+                [now, *keys, *unique_types],
+            )
+        else:
+            self._conn.execute(
+                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"
+                f" WHERE key IN ({key_placeholders})",
+                [now, *keys],
+            )
         self._conn.commit()
 
     @staticmethod
