@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/tests-75%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-107%20passing-green" alt="Tests">
 </p>
 
 ---
@@ -528,7 +528,7 @@ make build
 
 ```bash
 make test
-# Runs: 4 Rust + 61 Python + 10 TypeScript = 75 tests
+# Runs: 4 Rust + 93 Python + 10 TypeScript = 107 tests
 ```
 
 ### Individual Components
@@ -582,12 +582,13 @@ make lint
 - [x] Durable execution with SQLite-backed checkpointing + crash recovery
 - [x] Full TypeScript Agent class with LLM integration, routing, budget
 
-### Phase 3 — Production Polish
-- [ ] Built-in web dashboard (`archon dashboard`)
-- [ ] Continuous evaluation (inline + async + regression)
-- [ ] Shadow deployments for safe rollouts
-- [ ] Governance (event sourcing, RBAC, GDPR compliance)
-- [ ] MCP client + A2A protocol support
+### Phase 3 — Production Polish ✅
+- [x] Built-in web dashboard (`archon dashboard` — dark theme, zero JS deps)
+- [x] Continuous evaluation (inline validators + async quality scoring + regression detection)
+- [x] Shadow deployments (run candidate in parallel, compare scores, promotion recommendation)
+- [x] Governance (event sourcing, RBAC for tool access, GDPR-compliant erasure)
+- [x] MCP client (stdio transport, tool discovery, to_archon_tools conversion)
+- [x] A2A protocol (Agent Cards, skill discovery, remote agent fetch)
 
 ---
 
@@ -605,10 +606,10 @@ make lint
 | Built-in trace store | ✗ (LangSmith $) | ✗ | ✗ | Partial | **✓** |
 | CLI for traces | ✗ | ✗ | ✗ | ✗ | **✓** |
 | Tiered memory | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Continuous eval | ✗ | ✗ | Partial | ✗ | **✓** (planned) |
+| Continuous eval | ✗ | ✗ | Partial | ✗ | **✓** |
 | Python + TypeScript | ✗ | ✗ | ✗ | ✗ | **✓** |
-| MCP support | ✓ | ✓ | ✓ | ✓ | **✓** (planned) |
-| Durable execution | ✓ | ✗ | ✓ (ext.) | ✗ | **✓** (planned) |
+| MCP support | ✓ | ✓ | ✓ | ✓ | **✓** |
+| Durable execution | ✓ | ✗ | ✓ (ext.) | ✗ | **✓** |
 
 **Archon doesn't compete with these frameworks on orchestration patterns.** LangGraph's graph model, CrewAI's role-based teams, and Pydantic-AI's DX are excellent. Archon competes on the **production harness** — the infrastructure layer that makes any agent safe, cheap, and observable.
 

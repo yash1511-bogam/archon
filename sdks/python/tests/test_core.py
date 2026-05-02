@@ -653,3 +653,348 @@ def test_checkpoint_store_operations():
     assert "s2" not in completed
     assert store.is_completed("p1", "s1")
     assert not store.is_completed("p1", "s2")
+
+
+# ══════════════════════════════════════════════════════
+# Phase 3 Tests — Eval, Shadow, Governance, Protocols
+# ══════════════════════════════════════════════════════
+
+from archon.eval import (
+    EvalEngine, EvalSeverity, SchemaValidator, LoopDetector,
+    CostGuard, ToolEfficiencyValidator, OutputLengthScorer,
+    CoherenceScorer, RegressionDetector,
+)
+from archon.shadow import ShadowRunner, ShadowComparison
+from archon.governance import EventStore, EventType, Event, RBACManager, Role, GDPRManager
+from archon.protocols import AgentCard, AgentSkill, MCPClient
+
+
+# ── Eval: Inline Validators ───────────────────────────
+
+def test_schema_validator_pass():
+    v = SchemaValidator()
+    result = v.validate(AgentResult(run_id="r", output="Hello world"))
+    assert result.severity == EvalSeverity.PASS
+
+
+def test_schema_validator_empty():
+    v = SchemaValidator()
+    result = v.validate(AgentResult(run_id="r", output=""))
+    assert result.severity == EvalSeverity.FAIL
+
+
+def test_schema_validator_budget_exceeded():
+    v = SchemaValidator()
+    result = v.validate(AgentResult(run_id="r", output="[Budget exceeded after 5 steps]"))
+    assert result.severity == EvalSeverity.WARNING
+
+
+def test_loop_detector_no_loops():
+    v = LoopDetector()
+    result = v.validate(AgentResult(run_id="r", output="ok", steps=[
+        Step(id="1", model="m", tier=Tier.SIMPLE, tool_call="search"),
+        Step(id="2", model="m", tier=Tier.SIMPLE, tool_call="read"),
+    ]))
+    assert result.severity == EvalSeverity.PASS
+
+
+def test_loop_detector_finds_loop():
+    v = LoopDetector()
+    result = v.validate(AgentResult(run_id="r", output="ok", steps=[
+        Step(id="1", model="m", tier=Tier.SIMPLE, tool_call="search"),
+        Step(id="2", model="m", tier=Tier.SIMPLE, tool_call="search"),
+        Step(id="3", model="m", tier=Tier.SIMPLE, tool_call="search"),
+    ]))
+    assert result.severity == EvalSeverity.FAIL
+    assert "search" in result.message
+
+
+def test_cost_guard_pass():
+    v = CostGuard()
+    result = v.validate(AgentResult(run_id="r", output="ok", total_cost_usd=0.05, steps=[
+        Step(id="1", model="m", tier=Tier.SIMPLE),
+    ]))
+    assert result.severity == EvalSeverity.PASS
+
+
+def test_cost_guard_warning():
+    v = CostGuard()
+    result = v.validate(AgentResult(run_id="r", output="ok", total_cost_usd=2.0, steps=[
+        Step(id="1", model="m", tier=Tier.COMPLEX),
+    ]))
+    assert result.severity == EvalSeverity.WARNING
+
+
+def test_tool_efficiency_pass():
+    v = ToolEfficiencyValidator()
+    result = v.validate(AgentResult(run_id="r", output="ok", steps=[
+        Step(id="1", model="m", tier=Tier.SIMPLE, tool_call="search"),
+        Step(id="2", model="m", tier=Tier.SIMPLE),
+    ]))
+    assert result.severity == EvalSeverity.PASS
+
+
+# ── Eval: Async Scorers ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_output_length_scorer():
+    s = OutputLengthScorer()
+    result = await s.score("test", AgentResult(run_id="r", output="A detailed answer with enough content."))
+    assert result.severity == EvalSeverity.PASS
+
+
+@pytest.mark.asyncio
+async def test_output_length_scorer_short():
+    s = OutputLengthScorer()
+    result = await s.score("test", AgentResult(run_id="r", output="Hi"))
+    assert result.severity == EvalSeverity.WARNING
+
+
+@pytest.mark.asyncio
+async def test_coherence_scorer_clean():
+    s = CoherenceScorer()
+    result = await s.score("test", AgentResult(run_id="r", output="A clean response."))
+    assert result.severity == EvalSeverity.PASS
+
+
+@pytest.mark.asyncio
+async def test_coherence_scorer_errors():
+    s = CoherenceScorer()
+    result = await s.score("test", AgentResult(run_id="r", output="[Tool error: failed] and [BLOCKED by policy]"))
+    assert result.severity == EvalSeverity.WARNING
+
+
+# ── Eval: Regression Detector ─────────────────────────
+
+def test_regression_detector_insufficient_data():
+    rd = RegressionDetector()
+    results = rd.check("agent_x")
+    assert results[0].severity == EvalSeverity.PASS
+    assert "Insufficient" in results[0].message
+
+
+def test_regression_detector_stable():
+    rd = RegressionDetector()
+    for _ in range(20):
+        rd.record("agent_x", score=0.9, cost=0.05, failed=False)
+    results = rd.check("agent_x")
+    assert all(r.severity == EvalSeverity.PASS for r in results)
+
+
+def test_regression_detector_score_drop():
+    rd = RegressionDetector()
+    for _ in range(10):
+        rd.record("agent_x", score=0.9, cost=0.05, failed=False)
+    for _ in range(10):
+        rd.record("agent_x", score=0.5, cost=0.05, failed=False)
+    results = rd.check("agent_x")
+    score_result = next(r for r in results if r.name == "score_regression")
+    assert score_result.severity == EvalSeverity.WARNING
+
+
+# ── Eval: Engine ───────────────────────────────────────
+
+def test_eval_engine_inline():
+    engine = EvalEngine()
+    result = AgentResult(run_id="r", output="Good output", total_cost_usd=0.01, steps=[
+        Step(id="1", model="m", tier=Tier.SIMPLE),
+    ])
+    evals = engine.run_inline(result)
+    assert len(evals) == 4
+    assert all(e.severity == EvalSeverity.PASS for e in evals)
+
+
+# ── Shadow Deployments ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_shadow_runner():
+    primary = MockAgent("primary", "primary output")
+    candidate = MockAgent("candidate", "candidate output")
+
+    shadow = ShadowRunner(primary=primary, candidate=candidate)
+    comparison = await shadow.run("test prompt")
+
+    assert comparison.primary_result.output.startswith("primary output")
+    assert comparison.candidate_result.output.startswith("candidate output")
+    assert isinstance(comparison.recommendation, str)
+    assert comparison.primary_avg_score > 0
+    assert comparison.candidate_avg_score > 0
+
+
+@pytest.mark.asyncio
+async def test_shadow_runner_batch():
+    primary = MockAgent("primary", "output")
+    candidate = MockAgent("candidate", "output")
+
+    shadow = ShadowRunner(primary=primary, candidate=candidate)
+    comparisons = await shadow.run_batch(["prompt 1", "prompt 2"])
+    assert len(comparisons) == 2
+
+
+# ── Governance: Event Store ────────────────────────────
+
+def test_event_store_append_and_query():
+    store = EventStore()
+    event = Event(event_type=EventType.AGENT_STARTED, agent="researcher", run_id="run-1")
+    event_id = store.append(event)
+    assert event_id > 0
+
+    events = store.get_events(run_id="run-1")
+    assert len(events) == 1
+    assert events[0].event_type == EventType.AGENT_STARTED
+
+
+def test_event_store_filter_by_type():
+    store = EventStore()
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r1"))
+    store.append(Event(event_type=EventType.TOOL_BLOCKED, agent="a", run_id="r1"))
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r2"))
+
+    tool_calls = store.get_events(event_type=EventType.TOOL_CALLED)
+    assert len(tool_calls) == 2
+
+
+def test_event_store_replay():
+    store = EventStore()
+    store.append(Event(event_type=EventType.AGENT_STARTED, agent="a", run_id="r1"))
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r1", data={"tool": "search"}))
+    store.append(Event(event_type=EventType.AGENT_COMPLETED, agent="a", run_id="r1"))
+
+    replay = store.replay("r1")
+    assert len(replay) == 3
+    assert replay[0].event_type == EventType.AGENT_STARTED
+    assert replay[-1].event_type == EventType.AGENT_COMPLETED
+
+
+def test_event_store_user_filter():
+    store = EventStore()
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r1", user_id="user-1"))
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r2", user_id="user-2"))
+
+    user1_events = store.get_events(user_id="user-1")
+    assert len(user1_events) == 1
+
+
+# ── Governance: RBAC ──────────────────────────────────
+
+def test_rbac_allow():
+    rbac = RBACManager()
+    rbac.add_role(Role("researcher", allow_tools={"search_web", "read_file"}))
+    rbac.assign_role("agent:researcher", "researcher")
+
+    assert rbac.check("agent:researcher", "search_web") == "allow"
+    assert rbac.check("agent:researcher", "delete_file") == "deny"
+
+
+def test_rbac_deny_overrides_allow():
+    rbac = RBACManager()
+    rbac.add_role(Role("limited", allow_tools={"search_web"}, deny_tools={"search_web"}))
+    rbac.assign_role("agent:x", "limited")
+
+    assert rbac.check("agent:x", "search_web") == "deny"
+
+
+def test_rbac_require_approval():
+    rbac = RBACManager()
+    rbac.add_role(Role("deployer", allow_tools={"deploy"}, require_approval_tools={"deploy"}))
+    rbac.assign_role("agent:deploy", "deployer")
+
+    assert rbac.check("agent:deploy", "deploy") == "require_approval"
+
+
+def test_rbac_no_role():
+    rbac = RBACManager()
+    assert rbac.check("unknown_agent", "anything") == "deny"
+
+
+def test_rbac_get_role():
+    rbac = RBACManager()
+    rbac.add_role(Role("admin", allow_tools=set()))
+    rbac.assign_role("user:admin", "admin")
+
+    role = rbac.get_role("user:admin")
+    assert role is not None
+    assert role.name == "admin"
+
+
+# ── Governance: GDPR ──────────────────────────────────
+
+def test_gdpr_export():
+    store = EventStore()
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r1", user_id="user-42"))
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r2", user_id="user-42"))
+
+    gdpr = GDPRManager(event_store=store)
+    export = gdpr.export_user_data("user-42")
+
+    assert export.user_id == "user-42"
+    assert len(export.events) == 2
+
+
+def test_gdpr_erase():
+    store = EventStore()
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r1", user_id="user-42"))
+    store.append(Event(event_type=EventType.TOOL_CALLED, agent="a", run_id="r2", user_id="user-99"))
+
+    gdpr = GDPRManager(event_store=store)
+    result = gdpr.erase_user_data("user-42")
+
+    assert result.events_erased == 1
+    # Verify user-42 events are gone
+    remaining = store.get_events(user_id="user-42")
+    # Only the erasure log event should remain
+    assert all(e.event_type == EventType.USER_DATA_ERASED for e in remaining)
+    # user-99 events should be untouched
+    assert len(store.get_events(user_id="user-99")) == 1
+
+
+# ── Protocols: A2A Agent Card ──────────────────────────
+
+def test_agent_card_serialization():
+    card = AgentCard(
+        name="researcher",
+        description="Finds information",
+        url="https://example.com/agents/researcher",
+        skills=[AgentSkill(id="search", name="Web Search", description="Search the web")],
+    )
+
+    data = card.to_dict()
+    assert data["name"] == "researcher"
+    assert len(data["skills"]) == 1
+
+    json_str = card.to_json()
+    assert "researcher" in json_str
+
+
+def test_agent_card_deserialization():
+    data = {
+        "name": "writer",
+        "description": "Writes content",
+        "url": "https://example.com/agents/writer",
+        "skills": [{"id": "write", "name": "Write", "description": "Write articles"}],
+    }
+    card = AgentCard.from_dict(data)
+    assert card.name == "writer"
+    assert len(card.skills) == 1
+    assert card.skills[0].id == "write"
+
+
+def test_agent_card_roundtrip():
+    original = AgentCard(
+        name="test",
+        description="Test agent",
+        url="http://localhost:8080",
+        version="1.0",
+        provider="Archon",
+        skills=[
+            AgentSkill(id="s1", name="Skill 1", description="Does thing 1"),
+            AgentSkill(id="s2", name="Skill 2", description="Does thing 2"),
+        ],
+    )
+    data = original.to_dict()
+    restored = AgentCard.from_dict(data)
+
+    assert restored.name == original.name
+    assert restored.url == original.url
+    assert len(restored.skills) == 2
+    assert restored.skills[0].id == "s1"

@@ -52,6 +52,15 @@ def traces() -> None:
     """Query and manage agent execution traces."""
 
 
+@main.command("dashboard")
+@click.option("--port", "-p", default=8080, help="Port to serve on.")
+@click.option("--db", default=None, help="Path to trace database.")
+def dashboard_cmd(port: int, db: str | None) -> None:
+    """Start the built-in web dashboard."""
+    from archon.dashboard import start_dashboard
+    start_dashboard(port=port, db_path=db)
+
+
 # ── archon traces list ─────────────────────────────────
 
 @traces.command("list")
