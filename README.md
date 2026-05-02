@@ -136,7 +136,7 @@ Not a dashboard. Not an alert. A **hard stop**.
 budget = Budget(max_per_run=0.50, max_per_day=10.00, max_per_month=200.00)
 ```
 
-When the budget runs low, the router automatically downgrades to cheaper models. When it's exceeded, the agent stops gracefully and returns a partial result. No surprise bills.
+All three limits are enforced independently. The run budget resets automatically between `agent.run()` calls. Day and month budgets reset on calendar boundaries. When any limit runs low, the router downgrades to cheaper models. When exceeded, the agent stops gracefully and returns a partial result. LLM errors mid-run are caught — you always get an `AgentResult` back, never an unhandled crash.
 
 ### Tiered Memory
 
@@ -173,7 +173,7 @@ security = SecurityConfig(
 )
 ```
 
-Tool outputs are sanitized before passing to the LLM — 7 threat categories (instruction override, role hijack, prompt extraction, data exfiltration, delimiter injection, encoded payloads, embedded instructions).
+Tool outputs are sanitized before passing to the LLM — 7 threat categories (instruction override, role hijack, prompt extraction, data exfiltration, delimiter injection, encoded payloads, embedded instructions). Wildcard rules that shadow specific rules are flagged at construction time.
 
 ### Continuous Evaluation
 
@@ -196,6 +196,8 @@ shadow = ShadowRunner(primary=current_agent, candidate=new_agent)
 comparison = await shadow.run("user prompt")
 print(comparison.recommendation)  # "PROMOTE — candidate scores 0.12 higher, $0.003 cheaper"
 ```
+
+If the candidate agent crashes (API error, timeout), the primary result is still returned — shadow failures never affect production.
 
 ### Governance
 
@@ -272,7 +274,7 @@ result = await pipeline.run("Analyze the AI agent market")
 print(f"Total cost: ${result.total_cost_usd:.4f}")
 ```
 
-If the pipeline crashes mid-run, re-running with the same `pipeline_id` skips completed steps automatically.
+If the pipeline crashes mid-run, re-running with the same `pipeline_id` skips completed steps automatically. Step names must be unique (validated at construction). Parallel step failures are isolated — one failing step doesn't kill its siblings.
 
 ---
 
