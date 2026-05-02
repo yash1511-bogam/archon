@@ -110,7 +110,7 @@ _THREAT_PATTERNS: list[tuple[str, re.Pattern[str], ThreatLevel]] = [
         r"(?i)"
         r"(important|critical|urgent)\s*:\s*(you\s+must|always|never|do\s+not)"
         r"|(note\s*:\s*the\s+(assistant|ai|model)\s+(should|must|will))"
-        r"|(_note|_instruction|_system)\s*[=:]\s*"
+        r"|(_instruction|_system)\s*[=:]\s*(you|the\s+(ai|assistant|model))"
     ), ThreatLevel.LOW),
 ]
 

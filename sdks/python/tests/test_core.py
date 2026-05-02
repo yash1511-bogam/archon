@@ -1168,3 +1168,124 @@ def test_bedrock_models():
     assert "bedrock/nova-micro" in model_ids
     assert "bedrock/claude-opus-4.6" in model_ids
     assert "bedrock/llama-4-scout" in model_ids
+
+
+# ── Agent.run() Integration Test ───────────────────────
+
+@pytest.mark.asyncio
+async def test_agent_run_integration(monkeypatch):
+    """Integration test: Agent.run() with mocked LLM through the full 5-gate pipeline."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    # Build a fake LiteLLM response (no tool calls — single-turn)
+    fake_message = MagicMock()
+    fake_message.content = "The answer is 42."
+    fake_message.tool_calls = None
+
+    fake_usage = MagicMock()
+    fake_usage.prompt_tokens = 50
+    fake_usage.completion_tokens = 20
+
+    fake_choice = MagicMock()
+    fake_choice.message = fake_message
+
+    fake_response = MagicMock()
+    fake_response.choices = [fake_choice]
+    fake_response.usage = fake_usage
+    fake_response._hidden_params = {"response_cost": 0.0023}
+
+    import archon.agent as agent_mod
+    monkeypatch.setattr(agent_mod.litellm, "acompletion", AsyncMock(return_value=fake_response))
+
+    @tool
+    def search(query: str) -> str:
+        """Search the web."""
+        return f"results for {query}"
+
+    agent = Agent(
+        name="test-agent",
+        instructions="You are a helpful assistant.",
+        tools=[search],
+        model="auto",
+        budget=Budget(max_per_run=1.00),
+        trace_store=TraceStore(None),
+    )
+
+    result = await agent.run("What is the meaning of life?")
+
+    # Output came through
+    assert result.output == "The answer is 42."
+    # Cost was tracked
+    assert result.total_cost_usd == pytest.approx(0.0023)
+    # Step was recorded
+    assert len(result.steps) == 1
+    assert result.steps[0].input_tokens == 50
+    assert result.steps[0].output_tokens == 20
+    # Budget was deducted
+    assert agent.budget.spent == pytest.approx(0.0023)
+    # Model was auto-routed (short query → simple tier)
+    assert result.steps[0].tier == Tier.SIMPLE
+    # Timestamps set
+    assert result.started_at is not None
+    assert result.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_agent_run_with_tool_call(monkeypatch):
+    """Integration test: Agent.run() with a tool call round-trip."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    # First response: LLM requests a tool call
+    tool_call = MagicMock()
+    tool_call.id = "call_123"
+    tool_call.function.name = "search"
+    tool_call.function.arguments = '{"query": "meaning of life"}'
+
+    msg1 = MagicMock()
+    msg1.content = None
+    msg1.tool_calls = [tool_call]
+    msg1.model_dump = lambda: {"role": "assistant", "content": None, "tool_calls": [
+        {"id": "call_123", "type": "function", "function": {"name": "search", "arguments": '{"query": "meaning of life"}'}}
+    ]}
+
+    # Second response: LLM gives final answer
+    msg2 = MagicMock()
+    msg2.content = "Based on my search, the answer is 42."
+    msg2.tool_calls = None
+
+    usage = MagicMock()
+    usage.prompt_tokens = 40
+    usage.completion_tokens = 15
+
+    resp1 = MagicMock()
+    resp1.choices = [MagicMock(message=msg1)]
+    resp1.usage = usage
+    resp1._hidden_params = {"response_cost": 0.001}
+
+    resp2 = MagicMock()
+    resp2.choices = [MagicMock(message=msg2)]
+    resp2.usage = usage
+    resp2._hidden_params = {"response_cost": 0.002}
+
+    import archon.agent as agent_mod
+    monkeypatch.setattr(agent_mod.litellm, "acompletion", AsyncMock(side_effect=[resp1, resp2]))
+
+    @tool
+    def search(query: str) -> str:
+        """Search the web."""
+        return f"42 is the answer to {query}"
+
+    agent = Agent(
+        name="test-agent",
+        instructions="You are helpful.",
+        tools=[search],
+        model="auto",
+        budget=Budget(max_per_run=1.00),
+    )
+
+    result = await agent.run("What is the meaning of life?")
+
+    assert result.output == "Based on my search, the answer is 42."
+    assert len(result.steps) == 2
+    assert result.steps[0].tool_call == "search"
+    assert result.total_cost_usd == pytest.approx(0.003)

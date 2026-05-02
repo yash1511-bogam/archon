@@ -1,5 +1,7 @@
 use crate::types::Tier;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 /// Routing decision with reasoning.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,15 @@ impl Default for RouterConfig {
 pub struct Router {
     config: RouterConfig,
 }
+
+// Word-boundary regex — prevents "designer" matching "design".
+// Allows verb suffixes (ed, es, ing, tion, ation, ize, ized) but not agent nouns (er, ist).
+static ANALYSIS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(analyze|compare|evaluate|architect|design|optimize|debug|refactor)(e?d|e?s|ing|tion|ation|ize|ized)?\b").unwrap()
+});
+static MATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(calculate|prove|derive|equation|algorithm|complexity)(e?d|e?s|ing|tion|ation|ize|ized)?\b").unwrap()
+});
 
 impl Router {
     pub fn new(config: RouterConfig) -> Self {
@@ -88,17 +99,11 @@ impl Router {
             if input.to_lowercase().contains(kw) { score += 1; }
         }
 
-        // Analysis signals
-        let analysis = ["analyze", "compare", "evaluate", "architect", "design", "optimize", "debug", "refactor"];
-        for kw in &analysis {
-            if input.to_lowercase().contains(kw) { score += 2; }
-        }
+        // Analysis signals (word-boundary matching)
+        score += ANALYSIS_RE.find_iter(&input.to_lowercase()).count() as u32 * 2;
 
-        // Math/logic signals
-        let math = ["calculate", "prove", "derive", "equation", "algorithm", "complexity"];
-        for kw in &math {
-            if input.to_lowercase().contains(kw) { score += 2; }
-        }
+        // Math/logic signals (word-boundary matching)
+        score += MATH_RE.find_iter(&input.to_lowercase()).count() as u32 * 2;
 
         match score {
             0..=2 => Tier::Simple,
@@ -123,8 +128,8 @@ mod tests {
     fn complex_query() {
         let router = Router::new(RouterConfig::default());
         let decision = router.route(
-            "Analyze and compare the architecture of microservices vs monolith, \
-             then design an optimal migration strategy with code examples",
+            "Analyze and compare the architecture, then design an optimized \
+             solution with code examples. Calculate the algorithm complexity.",
             None,
         );
         assert_eq!(decision.tier, Tier::Complex);

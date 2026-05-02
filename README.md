@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/tests-126%20passing-green" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-128%20passing-green" alt="Tests">
   <img src="https://img.shields.io/badge/models-140%2B%20registered-blue" alt="Models">
   <img src="https://img.shields.io/badge/providers-17%2B-blue" alt="Providers">
 </p>
@@ -409,7 +409,7 @@ archon/
 # Prerequisites: Rust 1.75+, Python 3.10+ (uv), Node.js 20+ (pnpm)
 
 make build    # Build all three
-make test     # 4 Rust + 112 Python + 10 TypeScript = 126 tests
+make test     # 4 Rust + 114 Python + 10 TypeScript = 128 tests
 make lint     # ruff (Python) + tsc --noEmit (TypeScript)
 ```
 

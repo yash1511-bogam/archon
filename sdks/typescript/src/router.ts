@@ -6,6 +6,17 @@ const ANALYSIS = new Set([
 const MATH = new Set(["calculate", "prove", "derive", "equation", "algorithm", "complexity"]);
 const MULTI_STEP = ["step 1", "first,", "then,", "finally,", "after that", "next,"];
 
+// Word-boundary regex — prevents "designer" matching "design".
+// Allows verb suffixes (ed, es, ing, tion, ation, ize, ized).
+const ANALYSIS_RE = new RegExp(
+  `\\b(?:${[...ANALYSIS].join("|")})(?:e?d|e?s|ing|tion|ation|ize|ized)?\\b`,
+  "gi",
+);
+const MATH_RE = new RegExp(
+  `\\b(?:${[...MATH].join("|")})(?:e?d|e?s|ing|tion|ation|ize|ized)?\\b`,
+  "gi",
+);
+
 const DEFAULT_MODELS: Record<Tier, string[]> = {
   simple: ["gemini-2.5-flash", "gpt-4.1-nano"],
   standard: ["claude-sonnet-4.6", "gpt-4.1-mini"],
@@ -50,12 +61,11 @@ export class Router {
     for (const kw of MULTI_STEP) {
       if (lower.includes(kw)) score += 1;
     }
-    for (const kw of ANALYSIS) {
-      if (lower.includes(kw)) score += 2;
-    }
-    for (const kw of MATH) {
-      if (lower.includes(kw)) score += 2;
-    }
+    // Word-boundary matching via regex
+    ANALYSIS_RE.lastIndex = 0;
+    score += (lower.match(ANALYSIS_RE) ?? []).length * 2;
+    MATH_RE.lastIndex = 0;
+    score += (lower.match(MATH_RE) ?? []).length * 2;
 
     if (score <= 2) return "simple";
     if (score <= 6) return "standard";
