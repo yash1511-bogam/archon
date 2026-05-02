@@ -181,7 +181,7 @@ wheels = [
 ]
 
 [[package]]
-name = "archon-ai"
+name = "archon-framework"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

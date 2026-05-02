@@ -1,11 +1,11 @@
 [project]
-name = "archon-ai"
+name = "archon-framework"
 version = "0.1.0"
 description = "The production harness for AI agents — cost control, security, observability, memory built-in."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-authors = [{ name = "Archon Contributors" }]
+authors = [{ name = "Yash Bogam", email = "yash1511-bogam@users.noreply.github.com" }]
 keywords = ["ai", "agents", "llm", "framework", "production"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -24,6 +24,11 @@ dependencies = [
     "httpx>=0.28",
     "click>=8.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yash1511-bogam/archon"
+Repository = "https://github.com/yash1511-bogam/archon"
+Issues = "https://github.com/yash1511-bogam/archon/issues"
 
 [project.scripts]
 archon = "archon.cli:main"

@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "The production harness for AI agents — TypeScript SDK",
   "license": "Apache-2.0",
+  "author": "Yash Bogam",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yash1511-bogam/archon.git",
+    "directory": "sdks/typescript"
+  },
+  "homepage": "https://github.com/yash1511-bogam/archon",
+  "keywords": ["ai", "agents", "llm", "framework", "production", "budget", "routing"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

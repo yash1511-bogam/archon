@@ -6,6 +6,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License">
+  <img src="https://github.com/yash1511-bogam/archon/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <img src="https://img.shields.io/pypi/v/archon-framework?label=pypi" alt="PyPI">
+  <img src="https://img.shields.io/npm/v/@archon-ai/sdk?label=npm" alt="npm">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/typescript-5.8%2B-blue" alt="TypeScript">
   <img src="https://img.shields.io/badge/rust-2021-orange" alt="Rust">
@@ -280,9 +283,12 @@ If the pipeline crashes mid-run, re-running with the same `pipeline_id` skips co
 
 ## Installation
 
+[![PyPI](https://img.shields.io/pypi/v/archon-framework)](https://pypi.org/project/archon-framework/)
+[![npm](https://img.shields.io/npm/v/@archon-ai/sdk)](https://www.npmjs.com/package/@archon-ai/sdk)
+
 ```bash
 # Python (uv recommended)
-uv add archon-ai
+uv add archon-framework
 
 # TypeScript (pnpm recommended)
 pnpm add @archon-ai/sdk
