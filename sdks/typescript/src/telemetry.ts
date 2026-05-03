@@ -27,7 +27,7 @@ const INGEST_PATH = "/api/ingest";
 const VALIDATE_PATH = "/api/validate";
 
 /** SDK identifier sent with every request. */
-const USER_AGENT = "archon-typescript/0.1.0";
+const USER_AGENT = "archon-typescript/0.2.0";
 
 /** Retry tuning — conservative so we never hammer the API on outages. */
 const MAX_RETRIES = 3;

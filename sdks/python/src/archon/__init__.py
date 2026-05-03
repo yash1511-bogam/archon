@@ -63,4 +63,4 @@ __all__ = [
     "model_estimate_cost",
     "tool",
 ]
-__version__ = "0.3.0"
+__version__ = "0.2.0"

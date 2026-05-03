@@ -49,7 +49,7 @@ MAX_BACKOFF_SECONDS = 8.0
 REQUEST_TIMEOUT_SECONDS = 10.0
 
 # SDK identifier sent with every request (helps debug version-specific issues).
-USER_AGENT = "archon-python/0.3.0"
+USER_AGENT = "archon-python/0.2.0"
 
 # Status codes that should not be retried (auth / bad request).
 NO_RETRY_STATUS = frozenset({400, 401, 403, 404, 422})
