@@ -186,8 +186,33 @@ Event sourcing (every action is an immutable event), RBAC (role-based tool permi
 
 ## Dashboard & CLI
 
+**Web Dashboard** — full-featured webapp for managing your Archon deployment:
+
 ```bash
-archon dashboard                      # web UI at localhost:8080
+# Self-hosted dashboard (webapp/ directory)
+cd webapp && pnpm dev
+```
+
+- **API Key Management** — generate keys with scopes (`runs:write`, `runs:read`, `traces:read`) and optional expiry. Keys are SHA-256 hashed — never stored in plain text (Stripe/GitHub pattern).
+- **Real-time Analytics** — cost over time, model distribution, tier breakdown, top models. All charts update instantly via Convex reactive subscriptions.
+- **Traces** — every agent run recorded immutably. Click any run to inspect the five-gate pipeline step-by-step.
+- **Settings** — profile, notification preferences, danger zone.
+
+Authentication via [Clerk](https://clerk.com). Backend powered by [Convex](https://convex.dev) with real-time data sync. All queries use `ctx.auth.getUserIdentity()` — data is scoped per user, enforced at the database level.
+
+**SDK → Dashboard flow:**
+
+```
+Your code → Agent.run() → POST /api/ingest (Bearer API key)
+  → Convex validates key (SHA-256 hash lookup)
+  → Inserts run + steps linked to your userId
+  → Dashboard updates in real-time (<10ms)
+```
+
+**CLI** — lightweight terminal interface:
+
+```bash
+archon dashboard                      # local web UI at localhost:8080
 archon traces list                    # recent runs
 archon traces show <run_id>           # step-by-step detail
 archon traces stats                   # aggregate stats
@@ -230,10 +255,13 @@ archon/
 ├── crates/archon-core/     # Rust — types, budget, router, trace store
 ├── sdks/python/            # Python — Agent, tools, memory, security, eval, governance
 ├── sdks/typescript/        # TypeScript — Agent, budget, router
+├── webapp/                 # Next.js — Dashboard, API keys, analytics, traces
+│   ├── convex/             # Convex backend — schema, functions, HTTP actions
+│   └── src/                # React frontend — Clerk auth, GSAP animations, Recharts
 └── proto/                  # Shared JSON Schema protocol
 ```
 
-Rust for the performance-critical paths (budget tracking, trace storage, sandboxing). Python SDK built on Pydantic and LiteLLM. TypeScript SDK built on Zod. SQLite for everything by default — no Redis, no Postgres, no Docker.
+Rust for the performance-critical paths (budget tracking, trace storage, sandboxing). Python SDK built on Pydantic and LiteLLM. TypeScript SDK built on Zod. Webapp built on Next.js 16, Convex, and Clerk. SQLite for local storage — Convex for cloud dashboard.
 
 ---
 
