@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import litellm
@@ -34,6 +34,7 @@ from archon.cache import SemanticCache
 from archon.router import Router, RoutingDecision
 from archon.sanitize import Sanitizer
 from archon.security import PolicyAction, Sandbox, SecurityConfig
+from archon.telemetry import TelemetryClient
 from archon.tool import ToolDef
 from archon.trace import TraceStore
 from archon.types import AgentResult, Step, Tier
@@ -62,6 +63,11 @@ class Agent:
         cache: Semantic cache to skip repeated queries.
         trace_store: SQLite trace store for observability.
         sanitize: If True, sanitize tool outputs before passing to LLM.
+        telemetry: Cloud telemetry client. Defaults to a new ``TelemetryClient``
+            that auto-enables when ``ARCHON_API_KEY`` is set in the environment.
+            Pass a configured instance to customize the dashboard URL, or
+            ``False`` to explicitly disable cloud uploads even if the env
+            var is set.
     """
 
     def __init__(
@@ -77,6 +83,7 @@ class Agent:
         cache: SemanticCache | None = None,
         trace_store: TraceStore | None = None,
         sanitize: bool = True,
+        telemetry: TelemetryClient | bool | None = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
@@ -97,6 +104,7 @@ class Agent:
             if self.security.sandbox
             else None
         )
+        self._telemetry = self._resolve_telemetry(telemetry)
 
     async def run(self, prompt: str) -> AgentResult:
         """Execute the agent loop with the full production harness.
@@ -105,7 +113,7 @@ class Agent:
             AgentResult with output, cost, steps, and trace URL.
         """
         run_id = str(uuid.uuid4())
-        result = AgentResult(run_id=run_id, output="", started_at=datetime.now(timezone.utc))
+        result = AgentResult(run_id=run_id, output="", started_at=datetime.now(UTC))
 
         # Reset per-run budget before anything else so a shared ``Budget``
         # instance enforces ``max_per_run`` independently on each call.
@@ -178,7 +186,7 @@ class Agent:
             return None
 
         result.output = cached.response
-        result.finished_at = datetime.now(timezone.utc)
+        result.finished_at = datetime.now(UTC)
         cache_step = Step(id=f"{run_id}-cache", model=routing.model, tier=routing.tier, cached=True)
         result.steps.append(cache_step)
 
@@ -387,7 +395,7 @@ class Agent:
 
     def _finalize(self, result: AgentResult, run_id: str) -> AgentResult:
         """Compute final totals and persist the run summary."""
-        result.finished_at = datetime.now(timezone.utc)
+        result.finished_at = datetime.now(UTC)
         result.model_usage = {}
         for step in result.steps:
             result.model_usage[step.model] = result.model_usage.get(step.model, 0) + 1
@@ -398,6 +406,13 @@ class Agent:
                 run_id, result.output, result.total_cost_usd,
                 len(result.steps), total_tokens, result.total_latency_ms,
             )
+
+        # Gate 6: cloud telemetry — fire-and-forget, never blocks the caller.
+        # Enabled only when ARCHON_API_KEY is set (or an explicit client was
+        # passed). All failures are swallowed inside the client.
+        if self._telemetry is not None and self._telemetry.enabled:
+            self._telemetry.upload_run(result, agent_name=self.name)
+
         return result
 
     @staticmethod
@@ -406,6 +421,26 @@ class Agent:
         if messages:
             return messages[-1].get("content", "")
         return ""
+
+    @staticmethod
+    def _resolve_telemetry(
+        telemetry: TelemetryClient | bool | None,
+    ) -> TelemetryClient | None:
+        """Normalize the ``telemetry`` constructor argument.
+
+        * ``None`` (default) — create a client that auto-enables when
+          ``ARCHON_API_KEY`` is set, otherwise stays disabled.
+        * ``False`` — opt out entirely; return ``None``.
+        * ``True`` — same as ``None`` (explicit opt-in to defaults).
+        * ``TelemetryClient`` — use the provided instance as-is.
+        """
+        if telemetry is False:
+            return None
+        if isinstance(telemetry, TelemetryClient):
+            return telemetry
+        # ``True`` or ``None`` — build a default client. It no-ops when
+        # the env var is missing, so this is safe for offline users.
+        return TelemetryClient()
 
     @staticmethod
     def _extract_cost(response: Any) -> float:

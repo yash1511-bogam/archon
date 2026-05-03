@@ -24,6 +24,7 @@
 
 import { Budget, BudgetExceeded } from "./budget.js";
 import { Router } from "./router.js";
+import { TelemetryClient } from "./telemetry.js";
 import type { AgentResult, BudgetConfig, RoutingDecision, Step, Tier, ToolDef } from "./types.js";
 
 // ── Configuration ─────────────────────────────────────
@@ -56,6 +57,13 @@ export interface AgentConfig {
   apiKey?: string;
   /** OpenAI-compatible API base URL. */
   apiBase?: string;
+  /**
+   * Cloud telemetry client. Defaults to a new `TelemetryClient` that
+   * auto-enables when `ARCHON_API_KEY` is set in the environment. Pass
+   * a configured instance to customize the dashboard URL, or `false`
+   * to explicitly disable cloud uploads even if the env var is set.
+   */
+  telemetry?: TelemetryClient | boolean;
 }
 
 // ── Agent class ───────────────────────────────────────
@@ -70,6 +78,7 @@ export class Agent {
   private readonly router: Router;
   private readonly apiKey: string;
   private readonly apiBase: string;
+  private readonly telemetry: TelemetryClient | undefined;
 
   constructor(config: AgentConfig) {
     this.name = config.name;
@@ -81,6 +90,7 @@ export class Agent {
     this.router = new Router();
     this.apiKey = config.apiKey ?? process.env.OPENAI_API_KEY ?? "";
     this.apiBase = config.apiBase ?? DEFAULT_API_BASE;
+    this.telemetry = resolveTelemetry(config.telemetry);
   }
 
   /**
@@ -191,6 +201,14 @@ export class Agent {
     result.totalLatencyMs = Math.round(
       result.finishedAt.getTime() - result.startedAt.getTime(),
     );
+
+    // Gate 6: cloud telemetry — fire-and-forget, never blocks the caller.
+    // Enabled only when ARCHON_API_KEY is set (or an explicit client was
+    // passed). All failures are swallowed inside the client.
+    if (this.telemetry?.enabled) {
+      this.telemetry.uploadRun(result, this.name);
+    }
+
     return result;
   }
 
@@ -286,6 +304,25 @@ function recordStep(result: AgentResult, step: Step): void {
   result.totalInputTokens += step.inputTokens;
   result.totalOutputTokens += step.outputTokens;
   result.modelUsage[step.model] = (result.modelUsage[step.model] ?? 0) + 1;
+}
+
+/**
+ * Normalize the `telemetry` constructor argument.
+ *
+ *   - `undefined` (default) — create a client that auto-enables when
+ *     `ARCHON_API_KEY` is set; otherwise stays disabled.
+ *   - `false` — opt out entirely; return `undefined`.
+ *   - `true` — same as `undefined` (explicit opt-in to defaults).
+ *   - `TelemetryClient` — use the provided instance.
+ */
+function resolveTelemetry(
+  telemetry: TelemetryClient | boolean | undefined,
+): TelemetryClient | undefined {
+  if (telemetry === false) return undefined;
+  if (telemetry instanceof TelemetryClient) return telemetry;
+  // `true` or `undefined` — build a default client. It no-ops when the
+  // env var is missing, so this is safe for offline users.
+  return new TelemetryClient();
 }
 
 /** Rough cost estimate based on model name patterns. */

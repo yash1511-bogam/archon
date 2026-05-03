@@ -202,12 +202,21 @@ Authentication via [Clerk](https://clerk.com). Backend powered by [Convex](https
 
 **SDK → Dashboard flow:**
 
+```bash
+export ARCHON_API_KEY="arc_..."   # from dashboard → API Keys
+# Optional — defaults to https://archon.yashbogam.me
+# export ARCHON_BASE_URL="https://archon.yashbogam.me"
 ```
-Your code → Agent.run() → POST /api/ingest (Bearer API key)
+
+```
+Your code → Agent.run() → POST /api/ingest (Bearer arc_...)
+  → Next.js proxy forwards to Convex HTTP action
   → Convex validates key (SHA-256 hash lookup)
   → Inserts run + steps linked to your userId
   → Dashboard updates in real-time (<10ms)
 ```
+
+When `ARCHON_API_KEY` is **not** set, the SDK runs 100% locally — no network traffic, no cloud dependency. Telemetry upload is a fire-and-forget async task: it never blocks `agent.run()` and never crashes the agent on failure. Opt out explicitly by passing `telemetry=False` to `Agent(...)`.
 
 **CLI** — lightweight terminal interface:
 
