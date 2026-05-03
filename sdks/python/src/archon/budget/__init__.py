@@ -10,8 +10,7 @@ Day/month tracking resets automatically on calendar boundaries.
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -19,7 +18,9 @@ from pydantic import BaseModel, PrivateAttr
 DEFAULT_WARN_THRESHOLD = 0.8
 
 
-class BudgetExceeded(Exception):
+# ``BudgetExceeded`` is part of the public API; renaming to
+# ``BudgetExceededError`` would break user imports.
+class BudgetExceeded(Exception):  # noqa: N818 — public API, preserve name for SemVer
     """Raised when a proposed LLM call would exceed the budget."""
 
     def __init__(self, spent: float, limit: float, scope: str = "run") -> None:
@@ -41,7 +42,7 @@ class Budget(BaseModel):
         max_per_run: Maximum USD spend for a single agent.run() call.
         max_per_day: Maximum USD spend per calendar day.
         max_per_month: Maximum USD spend per calendar month.
-        warn_at: Fraction (0.0–1.0) at which to emit a warning.
+        warn_at: Fraction (0.0-1.0) at which to emit a warning.
     """
 
     max_per_run: float | None = None
@@ -58,7 +59,7 @@ class Budget(BaseModel):
 
     def model_post_init(self, __context: object) -> None:
         """Initialize day/month tracking to current calendar period."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._current_day = now.timetuple().tm_yday  # day-of-year (1-366)
         self._current_month = now.month
 
@@ -128,7 +129,7 @@ class Budget(BaseModel):
 
     def _reset_if_new_period(self) -> None:
         """Reset day/month counters if the calendar period has changed."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         day_of_year = now.timetuple().tm_yday
 
         if day_of_year != self._current_day:

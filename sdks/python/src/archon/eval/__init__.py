@@ -18,18 +18,17 @@ import re
 import statistics
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import Any, ClassVar
 
-from archon.types import AgentResult, Step
-
+from archon.types import AgentResult
 
 # ── Evaluation result ──────────────────────────────────
 
-class EvalSeverity(str, Enum):
+class EvalSeverity(StrEnum):
     """How serious is the evaluation finding."""
 
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 — severity label, not a password
     WARNING = "warning"
     FAIL = "fail"
 
@@ -42,7 +41,7 @@ class EvalResult:
         name: Evaluator name (e.g., "schema_validator", "loop_detector").
         severity: Pass, warning, or fail.
         message: Human-readable explanation.
-        score: Numeric score (0.0–1.0) where applicable.
+        score: Numeric score (0.0-1.0) where applicable.
         metadata: Additional structured data for debugging.
     """
 
@@ -69,7 +68,10 @@ class SchemaValidator(InlineValidator):
         if not result.output or not result.output.strip():
             return EvalResult("schema_validator", EvalSeverity.FAIL, "Empty output")
         if result.output.startswith("[Budget exceeded"):
-            return EvalResult("schema_validator", EvalSeverity.WARNING, "Budget exceeded before completion")
+            return EvalResult(
+                "schema_validator", EvalSeverity.WARNING,
+                "Budget exceeded before completion",
+            )
         return EvalResult("schema_validator", EvalSeverity.PASS, "Output is non-empty")
 
 
@@ -124,7 +126,7 @@ class CostGuard(InlineValidator):
 
 
 class ToolEfficiencyValidator(InlineValidator):
-    """Flag runs where tool calls exceed 3× the step count (planning failure)."""
+    """Flag runs where tool calls exceed 3x the step count (planning failure)."""
 
     EFFICIENCY_RATIO = 3.0
 
@@ -174,7 +176,7 @@ class OutputLengthScorer(AsyncScorer):
 class CoherenceScorer(AsyncScorer):
     """Check that the output doesn't contain obvious contradictions or errors."""
 
-    ERROR_PATTERNS = [
+    ERROR_PATTERNS: ClassVar[list[re.Pattern[str]]] = [
         re.compile(r"\[Tool error:", re.IGNORECASE),
         re.compile(r"\[BLOCKED by policy", re.IGNORECASE),
         re.compile(r"\[Unknown tool:", re.IGNORECASE),
@@ -201,7 +203,7 @@ class RegressionWindow:
     """A sliding window of recent evaluation scores for regression detection.
 
     Attributes:
-        scores: Recent scores (0.0–1.0) for a specific metric.
+        scores: Recent scores (0.0-1.0) for a specific metric.
         costs: Recent costs per run.
         failures: Per-entry failure flags, aligned with ``scores``/``costs``.
         window_size: Maximum entries to keep.
@@ -240,7 +242,7 @@ class RegressionDetector:
     """
 
     SCORE_DROP_THRESHOLD = 0.10  # 10% drop triggers warning
-    COST_SPIKE_THRESHOLD = 2.0   # 2× cost increase triggers warning
+    COST_SPIKE_THRESHOLD = 2.0   # 2x cost increase triggers warning
     FAILURE_RATE_THRESHOLD = 0.15  # 15% failure rate triggers warning
 
     def __init__(self) -> None:
@@ -271,23 +273,35 @@ class RegressionDetector:
         if score_drop > self.SCORE_DROP_THRESHOLD:
             results.append(EvalResult(
                 "score_regression", EvalSeverity.WARNING,
-                f"Score dropped {score_drop:.2f} (baseline={baseline_mean:.2f} → recent={recent_mean:.2f})",
+                f"Score dropped {score_drop:.2f} "
+                f"(baseline={baseline_mean:.2f} -> recent={recent_mean:.2f})",
                 score=recent_mean,
             ))
         else:
-            results.append(EvalResult("score_regression", EvalSeverity.PASS, f"Score stable at {recent_mean:.2f}"))
+            results.append(EvalResult(
+                "score_regression", EvalSeverity.PASS,
+                f"Score stable at {recent_mean:.2f}",
+            ))
 
         # Cost anomaly
         recent_cost = statistics.mean(window.costs[-10:])
-        baseline_cost = statistics.mean(window.costs[-20:-10]) if len(window.costs) >= 20 else statistics.mean(window.costs[:10])
+        baseline_cost = (
+            statistics.mean(window.costs[-20:-10])
+            if len(window.costs) >= 20
+            else statistics.mean(window.costs[:10])
+        )
 
         if baseline_cost > 0 and recent_cost / baseline_cost > self.COST_SPIKE_THRESHOLD:
             results.append(EvalResult(
                 "cost_anomaly", EvalSeverity.WARNING,
-                f"Cost spike: ${baseline_cost:.4f} → ${recent_cost:.4f} ({recent_cost/baseline_cost:.1f}×)",
+                f"Cost spike: ${baseline_cost:.4f} -> ${recent_cost:.4f} "
+                f"({recent_cost/baseline_cost:.1f}x)",
             ))
         else:
-            results.append(EvalResult("cost_anomaly", EvalSeverity.PASS, f"Cost stable at ${recent_cost:.4f}"))
+            results.append(EvalResult(
+                "cost_anomaly", EvalSeverity.PASS,
+                f"Cost stable at ${recent_cost:.4f}",
+            ))
 
         # Failure rate
         total = len(window.scores)
@@ -298,7 +312,10 @@ class RegressionDetector:
                 f"Failure rate: {failure_rate:.1%} ({window.failure_count}/{total})",
             ))
         else:
-            results.append(EvalResult("failure_rate", EvalSeverity.PASS, f"Failure rate: {failure_rate:.1%}"))
+            results.append(EvalResult(
+                "failure_rate", EvalSeverity.PASS,
+                f"Failure rate: {failure_rate:.1%}",
+            ))
 
         return results
 

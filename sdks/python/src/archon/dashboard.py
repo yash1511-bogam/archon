@@ -13,8 +13,6 @@ Usage::
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -99,10 +97,10 @@ def create_app(db_path: Path | str | None = None) -> Any:
         from starlette.applications import Starlette
         from starlette.responses import HTMLResponse, JSONResponse
         from starlette.routing import Route
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "Dashboard requires starlette. Install with: uv pip install starlette uvicorn"
-        )
+        ) from err
 
     default_db = Path.home() / ".archon" / "traces.db"
     store_path = Path(db_path) if db_path else default_db
@@ -258,8 +256,10 @@ def start_dashboard(*, port: int = 8080, db_path: str | None = None) -> None:
     """Start the dashboard server. Called by ``archon dashboard`` CLI command."""
     try:
         import uvicorn
-    except ImportError:
-        raise ImportError("Dashboard requires uvicorn. Install with: uv pip install uvicorn")
+    except ImportError as err:
+        raise ImportError(
+            "Dashboard requires uvicorn. Install with: uv pip install uvicorn"
+        ) from err
 
     app = create_app(db_path)
     print(f"⚡ Archon Dashboard running at http://localhost:{port}")

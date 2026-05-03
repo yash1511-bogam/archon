@@ -18,22 +18,20 @@ Three orchestration patterns::
 from __future__ import annotations
 
 import asyncio
-import json
 import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from archon.types import AgentResult
 
-
 # ── Step status ────────────────────────────────────────
 
-class StepStatus(str, Enum):
+class StepStatus(StrEnum):
     """Lifecycle state of a pipeline step."""
 
     PENDING = "pending"
@@ -166,12 +164,16 @@ class CheckpointStore:
         latency_ms: int = 0,
     ) -> None:
         """Save or update a checkpoint for a pipeline step."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._conn.execute(
             "INSERT OR REPLACE INTO checkpoints"
-            " (pipeline_id, step_name, status, output, cost_usd, steps_count, latency_ms, created_at)"
+            " (pipeline_id, step_name, status, output,"
+            " cost_usd, steps_count, latency_ms, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (pipeline_id, step_name, status.value, output, cost_usd, steps_count, latency_ms, now),
+            (
+                pipeline_id, step_name, status.value, output,
+                cost_usd, steps_count, latency_ms, now,
+            ),
         )
         self._conn.commit()
 
@@ -234,7 +236,8 @@ class Pipeline:
                 if name in seen:
                     raise ValueError(
                         f"Duplicate pipeline step name: {name!r}. "
-                        "Each step (including those inside Parallel groups) must have a unique name."
+                        "Each step (including those inside Parallel groups)"
+                        " must have a unique name."
                     )
                 seen.add(name)
 
@@ -322,7 +325,7 @@ class Pipeline:
         outcomes = await asyncio.gather(*tasks, return_exceptions=True)
 
         failed_steps: list[tuple[str, BaseException]] = []
-        for step, outcome in zip(pending, outcomes):
+        for step, outcome in zip(pending, outcomes, strict=True):
             if isinstance(outcome, BaseException):
                 failed_steps.append((step.name, outcome))
                 # Ensure the checkpoint and result reflect the failure even

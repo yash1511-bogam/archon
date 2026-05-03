@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import click
@@ -23,9 +23,11 @@ DEFAULT_TRACE_DB = Path.home() / ".archon" / "traces.db"
 
 # ── Table formatting constants ─────────────────────────
 
-LIST_HEADER = f"{'RUN ID':<38} {'AGENT':<15} {'STEPS':>5} {'COST':>10} {'TOKENS':>8} {'LATENCY':>10} {'STARTED'}"
+# Fixed-width column widths — line length exceeds 100 because column alignment
+# is a hard requirement. Splitting these would hurt readability.
+LIST_HEADER = f"{'RUN ID':<38} {'AGENT':<15} {'STEPS':>5} {'COST':>10} {'TOKENS':>8} {'LATENCY':>10} {'STARTED'}"  # noqa: E501
 LIST_SEPARATOR = "─" * 110
-STEP_HEADER = f"{'#':>3} {'MODEL':<25} {'TIER':<10} {'TOKENS':>8} {'COST':>10} {'LATENCY':>10} {'TOOL'}"
+STEP_HEADER = f"{'#':>3} {'MODEL':<25} {'TIER':<10} {'TOKENS':>8} {'COST':>10} {'LATENCY':>10} {'TOOL'}"  # noqa: E501
 STEP_SEPARATOR = "─" * 90
 
 
@@ -202,7 +204,7 @@ def traces_stats(db: str | None, as_json: bool) -> None:
 def traces_purge(db: str | None, before_days: int, yes: bool) -> None:
     """Delete traces older than a specified number of days."""
     store = _open_store(db)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=before_days)
+    cutoff = datetime.now(UTC) - timedelta(days=before_days)
 
     if not yes:
         click.confirm(f"Delete all traces before {cutoff.date()}?", abort=True)

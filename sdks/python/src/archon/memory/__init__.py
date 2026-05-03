@@ -1,7 +1,7 @@
 """Tiered memory system — working, episodic, semantic, and procedural.
 
 Inspired by cognitive science and production agent research:
-  - Working memory: pinned in LLM context, surgical (800–2K tokens)
+  - Working memory: pinned in LLM context, surgical (800-2K tokens)
   - Episodic memory: timestamped experiences that decay over time
   - Semantic memory: structured facts with conflict resolution
   - Procedural memory: learned tool-use patterns from successful runs
@@ -13,15 +13,13 @@ context poisoning and increased cost.
 
 from __future__ import annotations
 
-import hashlib
 import math
 import re
 import sqlite3
 import time
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +32,7 @@ DEFAULT_MAX_EPISODIC_AGE_DAYS = 90
 DEFAULT_MAX_SEMANTIC_STALENESS_DAYS = 30
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """The four tiers of agent memory."""
 
     WORKING = "working"
@@ -190,14 +188,16 @@ class Memory:
           2. TF-IDF cosine similarity on values
           3. Temporal decay weighting for episodic memories
 
-        Results are sorted by final score (relevance × recency).
+        Results are sorted by final score (relevance x recency).
         """
         types = memory_types or list(MemoryType)
         type_placeholders = ",".join("?" for _ in types)
         type_values = [t.value for t in types]
 
+        # Placeholders are generated from a controlled list (known enum), not user
+        # input. All actual values are passed as parameters.
         rows = self._conn.execute(
-            f"SELECT key, value, type, score, created_at, accessed_at, access_count, metadata"
+            f"SELECT key, value, type, score, created_at, accessed_at, access_count, metadata"  # noqa: S608
             f" FROM memories WHERE type IN ({type_placeholders})",
             type_values,
         ).fetchall()
@@ -339,15 +339,17 @@ class Memory:
             type_values = [t.value for t in types]
             unique_types = list(dict.fromkeys(type_values))  # preserve order, dedupe
             type_placeholders = ",".join("?" for _ in unique_types)
+            # Placeholders are generated from controlled lists (key count + enum),
+            # not user input. All values are passed as parameters.
             self._conn.execute(
-                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"
+                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"  # noqa: S608
                 f" WHERE key IN ({key_placeholders})"
                 f" AND type IN ({type_placeholders})",
                 [now, *keys, *unique_types],
             )
         else:
             self._conn.execute(
-                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"
+                f"UPDATE memories SET accessed_at = ?, access_count = access_count + 1"  # noqa: S608
                 f" WHERE key IN ({key_placeholders})",
                 [now, *keys],
             )

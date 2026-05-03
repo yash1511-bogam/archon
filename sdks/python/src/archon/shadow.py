@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from archon.eval import EvalEngine, EvalResult, EvalSeverity
 from archon.types import AgentResult

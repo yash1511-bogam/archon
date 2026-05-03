@@ -54,6 +54,15 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "S", "RUF"]
 
+# Files with intentional long lines:
+#   - models.py: the model registry is a tabular literal whose readability
+#     depends on column alignment; breaking rows would hurt more than help.
+#   - dashboard.py: inline CSS / HTML string templates; wrapping them
+#     obscures structure without improving anything.
+[tool.ruff.lint.per-file-ignores]
+"src/archon/models.py" = ["E501"]
+"src/archon/dashboard.py" = ["E501"]
+
 [tool.mypy]
 strict = true
 python_version = "3.11"

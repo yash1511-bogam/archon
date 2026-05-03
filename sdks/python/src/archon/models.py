@@ -1,18 +1,18 @@
 """Comprehensive model registry — every provider, every model, every price.
 
-Covers 2024–2026 models across all major providers and platforms:
+Covers 2024-2026 models across all major providers and platforms:
   - OpenAI (GPT-5.x, GPT-4.x, o-series, GPT-OSS)
-  - Anthropic (Claude Opus/Sonnet/Haiku 3.5–4.7)
-  - Google (Gemini 1.5–3.1, Gemma)
-  - xAI (Grok 3–4.20)
-  - DeepSeek (V3–V4, R1–R2)
-  - Meta (Llama 3.x–4.x)
+  - Anthropic (Claude Opus/Sonnet/Haiku 3.5-4.7)
+  - Google (Gemini 1.5-3.1, Gemma)
+  - xAI (Grok 3-4.20)
+  - DeepSeek (V3-V4, R1-R2)
+  - Meta (Llama 3.x-4.x)
   - Mistral (Large 3, Small 4, Magistral, Devstral, Nemo)
-  - Alibaba (Qwen 2.5–3.6)
+  - Alibaba (Qwen 2.5-3.6)
   - Cohere (Command R/R+/A, Embed, Rerank)
   - AI21 (Jamba 2)
   - Microsoft (Phi-4.x, MAI-DS-R1)
-  - Moonshot (Kimi K2–K2.6)
+  - Moonshot (Kimi K2-K2.6)
   - Perplexity (Sonar, Sonar Pro)
 
 Platform support:
@@ -29,8 +29,7 @@ Pricing is per 1M tokens (USD), updated April 2026.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

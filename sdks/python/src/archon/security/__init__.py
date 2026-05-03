@@ -20,7 +20,7 @@ import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ DEFAULT_MAX_OUTPUT_SIZE = 50_000
 DEFAULT_MAX_ARGS_LENGTH = 10_000
 
 
-class PolicyAction(str, Enum):
+class PolicyAction(StrEnum):
     """What to do when an agent tries to call a tool."""
 
     ALLOW = "allow"
@@ -161,12 +161,16 @@ class Sandbox:
         """)
 
         try:
-            process = subprocess.run(
+            # Intentional: sandbox runs tool code in an isolated ``python -c``
+            # subprocess with a timeout. Arguments are passed via stdin (not
+            # argv) so there is no shell interpretation of untrusted data.
+            process = subprocess.run(  # noqa: S603 — sandbox by design
                 [sys.executable, "-c", wrapper_code],
                 input=json.dumps(args),
                 capture_output=True,
                 text=True,
                 timeout=self.timeout_seconds,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return SandboxResult(

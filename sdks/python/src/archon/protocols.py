@@ -18,12 +18,10 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 from archon.tool import ToolDef
-
 
 # ══════════════════════════════════════════════════════
 # MCP Client
@@ -68,7 +66,10 @@ class MCPClient:
     def connect(self) -> None:
         """Start the MCP server subprocess."""
         parts = shlex.split(self.command)
-        self._process = subprocess.Popen(
+        # The command is user-supplied by design — MCP clients are explicitly
+        # configured with an intended server binary to launch. ``shlex.split``
+        # is used so there is no shell interpretation.
+        self._process = subprocess.Popen(  # noqa: S603 — user-configured MCP server command
             parts,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

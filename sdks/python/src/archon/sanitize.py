@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 # ── Threat severity levels ─────────────────────────────
 
-class ThreatLevel(str, Enum):
+class ThreatLevel(StrEnum):
     """Severity of a detected threat, from benign to critical."""
 
     NONE = "none"

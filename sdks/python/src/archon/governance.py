@@ -17,20 +17,18 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-
 from archon.security import PolicyAction
-
 
 # ══════════════════════════════════════════════════════
 # Event Sourcing
 # ══════════════════════════════════════════════════════
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Types of events in the event store."""
 
     AGENT_STARTED = "agent.started"
@@ -61,7 +59,7 @@ class Event:
     run_id: str
     data: dict[str, Any] = field(default_factory=dict)
     user_id: str | None = None
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     event_id: int | None = None  # Set by the store
 
 
@@ -122,7 +120,10 @@ class EventStore:
     ) -> list[Event]:
         """Query events with optional filters."""
         limit = max(1, limit)
-        query = "SELECT id, event_type, agent, run_id, user_id, data, timestamp FROM events WHERE 1=1"
+        query = (
+            "SELECT id, event_type, agent, run_id, user_id, data, timestamp"
+            " FROM events WHERE 1=1"
+        )
         params: list[Any] = []
 
         if run_id:
@@ -280,7 +281,7 @@ class GDPRExportResult:
     user_id: str
     events: list[Event]
     memory_entries: int
-    exported_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    exported_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 @dataclass
@@ -290,7 +291,7 @@ class GDPRErasureResult:
     user_id: str
     events_erased: int
     memory_entries_erased: int
-    erased_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    erased_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class GDPRManager:
@@ -342,9 +343,6 @@ class GDPRManager:
 
         Deletes events and memory entries. The erasure itself is logged.
         """
-        # Count events before deletion for the audit log
-        pre_count = len(self.event_store.get_events(user_id=user_id, limit=100000))
-
         # Delete events via public API (not private _conn)
         events_count = self.event_store.delete_by_user(user_id)
 

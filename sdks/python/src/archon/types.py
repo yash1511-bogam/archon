@@ -6,14 +6,14 @@ Agent → Router → Budget → TraceStore → CLI.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
 
-class Tier(str, Enum):
+class Tier(StrEnum):
     """Complexity tier for model routing.
 
     The router classifies every input into one of three tiers,
@@ -41,7 +41,7 @@ class Step(BaseModel):
     latency_ms: int = 0
     tool_call: str | None = None
     cached: bool = False
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AgentResult(BaseModel):
@@ -59,7 +59,7 @@ class AgentResult(BaseModel):
     total_output_tokens: int = 0
     total_latency_ms: int = 0
     model_usage: dict[str, int] = Field(default_factory=dict)
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     finished_at: datetime | None = None
 
     # Base URL for the dashboard; override to point trace_url at a custom host.

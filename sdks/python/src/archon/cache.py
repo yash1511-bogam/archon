@@ -15,7 +15,7 @@ import re
 import sqlite3
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 # ── Configuration defaults ─────────────────────────────
@@ -46,7 +46,7 @@ class CacheStats:
 
     @property
     def hit_rate(self) -> float:
-        """Fraction of lookups that returned a cached result (0.0–1.0)."""
+        """Fraction of lookups that returned a cached result (0.0-1.0)."""
         total = self.hits + self.misses
         return self.hits / total if total > 0 else 0.0
 
@@ -59,7 +59,7 @@ class SemanticCache:
 
     Args:
         db_path: Path to SQLite database. None for in-memory (testing).
-        similarity_threshold: Minimum cosine similarity for a semantic hit (0.0–1.0).
+        similarity_threshold: Minimum cosine similarity for a semantic hit (0.0-1.0).
         max_entries: Maximum cached entries before LRU eviction.
         ttl_seconds: Time-to-live for cache entries.
     """

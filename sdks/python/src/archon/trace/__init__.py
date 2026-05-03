@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -112,7 +112,7 @@ class TraceStore:
 
     def start_run(self, run_id: str, agent: str, prompt: str) -> None:
         """Register a new agent run."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._conn.execute(
             "INSERT OR IGNORE INTO runs (run_id, agent, prompt, started_at) VALUES (?, ?, ?, ?)",
             (run_id, agent, prompt, now),
@@ -129,7 +129,7 @@ class TraceStore:
         total_latency_ms: int,
     ) -> None:
         """Mark a run as complete with final totals."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._conn.execute(
             "UPDATE runs SET output=?, total_cost=?, total_steps=?, total_tokens=?,"
             " total_latency_ms=?, finished_at=? WHERE run_id=?",
@@ -249,8 +249,15 @@ class TraceStore:
         ).fetchone()[0]
 
         old_runs_subquery = "SELECT run_id FROM runs WHERE started_at < ?"
-        self._conn.execute(f"DELETE FROM steps WHERE run_id IN ({old_runs_subquery})", (cutoff,))
-        self._conn.execute(f"DELETE FROM audit WHERE run_id IN ({old_runs_subquery})", (cutoff,))
+        # Subquery is a static string literal; cutoff is passed as a parameter.
+        self._conn.execute(
+            f"DELETE FROM steps WHERE run_id IN ({old_runs_subquery})",  # noqa: S608
+            (cutoff,),
+        )
+        self._conn.execute(
+            f"DELETE FROM audit WHERE run_id IN ({old_runs_subquery})",  # noqa: S608
+            (cutoff,),
+        )
         self._conn.execute("DELETE FROM runs WHERE started_at < ?", (cutoff,))
         self._conn.commit()
         return count
